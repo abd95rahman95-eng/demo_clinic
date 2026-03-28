@@ -45,68 +45,68 @@
     <div class="card">
         <h3>القسم الطبي</h3>
         <div class="form-grid">
-            {% if form.history_of_present_illness.value %}
+            {% if form.history_of_present_illness %}
             <div class="full-width">
                             
                 <label>{{ form.history_of_present_illness.label }}</label>
                 {{ form.history_of_present_illness }}
             </div>
             {% endif %}
-            {% if form.past_medical_history.value %}
+            {% if form.past_medical_history %}
             <div class="full-width">
                 <label>{{ form.past_medical_history.label }}</label>
                 {{ form.past_medical_history }}
             </div>
             {% endif %}
-            {% if form.clinical_examination.value %}
+            {% if form.clinical_examination %}
             <div class="full-width">
                 <label>{{ form.clinical_examination.label }}</label>
                 {{ form.clinical_examination }}
             </div>
             {% endif %}
-            {% if form.diagnosis.value %}
+            {% if form.diagnosis %}
             <div class="full-width">
                 <label>{{ form.diagnosis.label }}</label>
                 {{ form.diagnosis }}
             </div>
             {% endif %}
-            {% if form.treatment_plan.value %}
+            {% if form.treatment_plan %}
             <div class="full-width">
                 <label>{{ form.treatment_plan.label }}</label>
                 {{ form.treatment_plan }}
             </div>
             {% endif %}
-            {% if form.prescription.value %}
+            {% if form.prescription %}
             <div class="full-width">
                 <label>{{ form.prescription.label }}</label>
                 {{ form.prescription }}
             </div>
             {% endif %}
-            {% if form.follow_up_date.value %}
+            {% if form.follow_up_date %}
             <div>
                 <label>{{ form.follow_up_date.label }}</label>
                 {{ form.follow_up_date }}
             </div>
             {% endif %}
-            {% if form.lab_requests.value %}
+            {% if form.lab_requests %}
             <div class="full-width">
                 <label>{{ form.lab_requests.label }}</label>
                 {{ form.lab_requests }}
             </div>
             {% endif %}
-            {% if form.imaging_requests.value %}
+            {% if form.imaging_requests %}
             <div class="full-width">
                 <label>{{ form.imaging_requests.label }}</label>
                 {{ form.imaging_requests }}
             </div>
             {% endif %}
-            {% if form.patient_instructions.value %}
+            {% if form.patient_instructions %}
             <div class="full-width">
                 <label>{{ form.patient_instructions.label }}</label>
                 {{ form.patient_instructions }}
             </div>
             {% endif %}
-            {% if form.doctor_notes.value %}
+            {% if form.doctor_notes %}
             <div class="full-width">
                 <label>{{ form.doctor_notes.label }}</label>
                 {{ form.doctor_notes }}

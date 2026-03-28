@@ -256,7 +256,7 @@ def patient_list(request):
             if item['status_key'] == filter_type
         ]
 
-    paginator = Paginator(patients_with_status_all, 5)
+    paginator = Paginator(patients_with_status_all, 8)
     page_number = request.GET.get('page')
     patients_with_status = paginator.get_page(page_number)
 

@@ -92,27 +92,59 @@
                 <p><strong>ملاحظات تمريضية:</strong> {{ visit.nursing_notes|default:"—" }}</p>
 
                 <div class="form-grid">
-                    <div><p><strong>ضغط الدم:</strong> {{ visit.blood_pressure|default:"—" }}</p></div>
-                    <div><p><strong>النبض:</strong> {{ visit.pulse|default:"—" }}</p></div>
-                    <div><p><strong>الحرارة:</strong> {{ visit.temperature|default:"—" }}</p></div>
-                    <div><p><strong>الوزن:</strong> {{ visit.weight|default:"—" }}</p></div>
-                    <div><p><strong>الطول:</strong> {{ visit.height|default:"—" }}</p></div>
-                    <div><p><strong>سكر الدم:</strong> {{ visit.blood_sugar|default:"—" }}</p></div>
+                    {% if visit.blood_pressure %}
+                    <div><p><strong>ضغط الدم:</strong> {{ visit.blood_pressure }}</p></div>
+                    {% endif %}
+                    {% if visit.pulse %}
+                    <div><p><strong>النبض:</strong> {{ visit.pulse }}</p></div>
+                    {% endif %}
+                    {% if visit.temperature %}
+                    <div><p><strong>الحرارة:</strong> {{ visit.temperature }}</p></div>
+                    {% endif %}
+                    {% if visit.weight %}
+                    <div><p><strong>الوزن:</strong> {{ visit.weight }}</p></div>
+                    {% endif %}
+                    {% if visit.height %}
+                    <div><p><strong>الطول:</strong> {{ visit.height }}</p></div>
+                    {% endif %}
+                    {% if visit.blood_sugar %}
+                    <div><p><strong>سكر الدم:</strong> {{ visit.blood_sugar }}</p></div>
+                    {% endif %}
                 </div>
 
                 <hr>
 
                 <h3>القسم الطبي</h3>
-                <p><strong>القصة المرضية الحالية:</strong> {{ visit.history_of_present_illness|default:"—" }}</p>
-                <p><strong>الفحص السريري:</strong> {{ visit.clinical_examination|default:"—" }}</p>
-                <p><strong>التشخيص:</strong> {{ visit.diagnosis|default:"—" }}</p>
-                <p><strong>الخطة العلاجية:</strong> {{ visit.treatment_plan|default:"—" }}</p>
-                <p><strong>الوصفة:</strong> {{ visit.prescription|default:"—" }}</p>
-                <p><strong>طلبات التحاليل:</strong> {{ visit.lab_requests|default:"—" }}</p>
-                <p><strong>طلبات الصور:</strong> {{ visit.imaging_requests|default:"—" }}</p>
-                <p><strong>تعليمات للمريض:</strong> {{ visit.patient_instructions|default:"—" }}</p>
-                <p><strong>موعد المراجعة القادم:</strong> {{ visit.follow_up_date|default:"—" }}</p>
-                <p><strong>ملاحظات الطبيب:</strong> {{ visit.doctor_notes|default:"—" }}</p>
+                {% if visit.history_of_present_illness %}
+                    <p><strong>القصة المرضية الحالية:</strong> {{ visit.history_of_present_illness }}</p>
+                {% endif %}
+                {% if visit.clinical_examination %}
+                    <p><strong>الفحص السريري:</strong> {{ visit.clinical_examination }}</p>
+                {% endif %}
+                {% if visit.diagnosis %}
+                    <p><strong>التشخيص:</strong> {{ visit.diagnosis }}</p>
+                {% endif %}
+                {% if visit.treatment_plan %}
+                    <p><strong>الخطة العلاجية:</strong> {{ visit.treatment_plan }}</p>
+                {% endif %}
+                {% if visit.prescription %}
+                    <p><strong>الوصفة:</strong> {{ visit.prescription }}</p>
+                {% endif %}
+                {% if visit.lab_requests %}
+                    <p><strong>طلبات التحاليل:</strong> {{ visit.lab_requests }}</p>
+                {% endif %}
+                {% if visit.imaging_requests %}
+                    <p><strong>طلبات الصور:</strong> {{ visit.imaging_requests }}</p>
+                {% endif %}
+                {% if visit.patient_instructions %}
+                    <p><strong>تعليمات للمريض:</strong> {{ visit.patient_instructions }}</p>
+                {% endif %}
+                {% if visit.follow_up_date %}
+                    <p><strong>موعد المراجعة القادم:</strong> {{ visit.follow_up_date }}</p>
+                {% endif %}
+                {% if visit.doctor_notes %}
+                    <p><strong>ملاحظات الطبيب:</strong> {{ visit.doctor_notes }}</p>
+                {% endif %}
 
                 <div class="actions" style="margin-top: 15px;">
                     <a href="{% url 'edit_visit' visit.id %}">✏️ تعديل الزيارة</a>

@@ -9,24 +9,12 @@
     <h3>البيانات التمريضية</h3>
     <div class="form-grid">
         <div><p><strong>نوع الزيارة:</strong> {{ visit.get_visit_type_display }}</p></div>
-        {% if visit.blood_pressure %}
             <div><p><strong>ضغط الدم:</strong> {{ visit.blood_pressure }}</p></div>
-        {% endif %}
-        {% if visit.pulse %}
             <div><p><strong>النبض:</strong> {{ visit.pulse }}</p></div>
-        {% endif %}
-        {% if visit.temperature %}
             <div><p><strong>الحرارة:</strong> {{ visit.temperature }}</p></div>
-        {% endif %}
-        {% if visit.weight %}
             <div><p><strong>الوزن:</strong> {{ visit.weight }}</p></div>
-        {% endif %}
-        {% if visit.height %}
             <div><p><strong>الطول:</strong> {{ visit.height }}</p></div>
-        {% endif %}
-        {% if visit.blood_sugar %}
             <div><p><strong>سكر الدم:</strong> {{ visit.blood_sugar }}</p></div>
-        {% endif %}
         <div class="full-width"><p><strong>الشكوى الرئيسية:</strong> {{ visit.chief_complaint }}</p></div>
         <div class="full-width"><p><strong>ملاحظات تمريضية:</strong> {{ visit.nursing_notes }}</p></div>
     </div>
@@ -45,73 +33,51 @@
     <div class="card">
         <h3>القسم الطبي</h3>
         <div class="form-grid">
-            {% if form.history_of_present_illness %}
             <div class="full-width">
                             
                 <label>{{ form.history_of_present_illness.label }}</label>
                 {{ form.history_of_present_illness }}
             </div>
-            {% endif %}
-            {% if form.past_medical_history %}
             <div class="full-width">
                 <label>{{ form.past_medical_history.label }}</label>
                 {{ form.past_medical_history }}
             </div>
-            {% endif %}
-            {% if form.clinical_examination %}
             <div class="full-width">
                 <label>{{ form.clinical_examination.label }}</label>
                 {{ form.clinical_examination }}
             </div>
-            {% endif %}
-            {% if form.diagnosis %}
             <div class="full-width">
                 <label>{{ form.diagnosis.label }}</label>
                 {{ form.diagnosis }}
             </div>
-            {% endif %}
-            {% if form.treatment_plan %}
             <div class="full-width">
                 <label>{{ form.treatment_plan.label }}</label>
                 {{ form.treatment_plan }}
             </div>
-            {% endif %}
-            {% if form.prescription %}
             <div class="full-width">
                 <label>{{ form.prescription.label }}</label>
                 {{ form.prescription }}
             </div>
-            {% endif %}
-            {% if form.follow_up_date %}
             <div>
                 <label>{{ form.follow_up_date.label }}</label>
                 {{ form.follow_up_date }}
             </div>
-            {% endif %}
-            {% if form.lab_requests %}
             <div class="full-width">
                 <label>{{ form.lab_requests.label }}</label>
                 {{ form.lab_requests }}
             </div>
-            {% endif %}
-            {% if form.imaging_requests %}
             <div class="full-width">
                 <label>{{ form.imaging_requests.label }}</label>
                 {{ form.imaging_requests }}
             </div>
-            {% endif %}
-            {% if form.patient_instructions %}
             <div class="full-width">
                 <label>{{ form.patient_instructions.label }}</label>
                 {{ form.patient_instructions }}
             </div>
-            {% endif %}
-            {% if form.doctor_notes %}
             <div class="full-width">
                 <label>{{ form.doctor_notes.label }}</label>
                 {{ form.doctor_notes }}
             </div>
-            {% endif %}
         </div>
     </div>
 

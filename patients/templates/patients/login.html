@@ -1,0 +1,23 @@
+{% extends 'patients/base.html' %}
+
+{% block title %}تسجيل الدخول{% endblock %}
+
+{% block content %}
+<h1>تسجيل الدخول</h1>
+
+<form method="post">
+    {% csrf_token %}
+
+    <label>اسم المستخدم:</label>
+    <input type="text" name="username">
+
+    <label>كلمة المرور:</label>
+    <input type="password" name="password">
+
+    <button type="submit" class="btn">دخول</button>
+</form>
+
+{% if error %}
+    <p style="color:red;">{{ error }}</p>
+{% endif %}
+{% endblock %}

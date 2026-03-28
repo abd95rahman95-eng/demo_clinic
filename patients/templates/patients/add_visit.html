@@ -1,0 +1,27 @@
+{% extends 'patients/base.html' %}
+
+{% block title %}إضافة زيارة{% endblock %}
+
+{% block content %}
+<h1>إضافة زيارة للمريض: {{ patient.name }}</h1>
+
+<form method="post">
+    {% csrf_token %}
+
+    <label>القصة المرضية:</label>
+    <textarea name="history"></textarea>
+
+    <label>التشخيص:</label>
+    <textarea name="diagnosis"></textarea>
+
+    <label>الوصفة:</label>
+    <textarea name="prescription"></textarea>
+
+    <label>الملاحظات:</label>
+    <textarea name="notes"></textarea>
+
+    <button type="submit" class="btn">حفظ</button>
+</form>
+
+<a href="{% url 'patient_detail' patient.id %}" class="btn btn-secondary">إلغاء</a>
+{% endblock %}

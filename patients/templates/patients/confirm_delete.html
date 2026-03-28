@@ -1,0 +1,18 @@
+{% extends 'patients/base.html' %}
+
+{% block title %}حذف مريض{% endblock %}
+
+{% block content %}
+<h2>هل أنت متأكد من حذف المريض؟</h2>
+
+<div class="card">
+    <p>{{ patient.name }}</p>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">نعم، حذف</button>
+</form>
+
+<a href="{% url 'patient_list' %}" class="btn btn-secondary">إلغاء</a>
+{% endblock %}

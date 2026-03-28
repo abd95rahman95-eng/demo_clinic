@@ -1,0 +1,32 @@
+{% extends 'patients/base.html' %}
+
+{% block title %}إضافة مريض{% endblock %}
+
+{% block content %}
+<h1>إضافة مريض جديد</h1>
+
+<form method="post" action="{% url 'add_patient' %}">
+    {% csrf_token %}
+
+    {% if form.errors %}
+        <div class="card" style="border:1px solid #b02a37; background:#fff5f5;">
+            <h3 style="color:#b02a37;">يوجد خطأ في البيانات</h3>
+            {{ form.errors }}
+        </div>
+    {% endif %}
+
+    <label>{{ form.name.label }}</label>
+    {{ form.name }}
+
+    <label>{{ form.age.label }}</label>
+    {{ form.age }}
+
+    <label>{{ form.phone.label }}</label>
+    {{ form.phone }}
+
+    <label>{{ form.address.label }}</label>
+    {{ form.address }}
+
+    <button type="submit" class="btn">إضافة</button>
+</form>
+{% endblock %}

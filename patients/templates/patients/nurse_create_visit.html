@@ -1,0 +1,79 @@
+{% extends 'patients/base.html' %}
+
+{% block title %}إضافة زيارة تمريضية{% endblock %}
+
+{% block content %}
+<h1>إضافة زيارة تمريضية للمريض: {{ patient.name }}</h1>
+
+<form method="post">
+    {% csrf_token %}
+    {% if form.errors %}
+    <div class="card" style="border:1px solid #b02a37; background:#fff5f5;">
+        <h3 style="color:#b02a37;">يوجد خطأ في البيانات</h3>
+        {{ form.errors }}
+    </div>
+    {% endif %}
+    <div class="card">
+        <h3>معلومات الزيارة</h3>
+
+        <label>{{ form.visit_type.label }}</label>
+        {{ form.visit_type }}
+
+        {% if form.assigned_doctor.field.widget.input_type != "hidden" %}
+            <label>{{ form.assigned_doctor.label }}</label>
+            {{ form.assigned_doctor }}
+        {% else %}
+            {{ form.assigned_doctor }}
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>البيانات التمريضية</h3>
+
+        <label>{{ form.chief_complaint.label }}</label>
+        {{ form.chief_complaint }}
+
+        <label>{{ form.nursing_notes.label }}</label>
+        {{ form.nursing_notes }}
+    </div>
+
+    <div class="card">
+        <h3>العلامات الحيوية</h3>
+        <div class="form-grid">
+            <div>
+                <label>{{ form.blood_pressure.label }}</label>
+                {{ form.blood_pressure }}
+            </div>
+
+            <div>
+                <label>{{ form.pulse.label }}</label>
+                {{ form.pulse }}
+            </div>
+
+            <div>
+                <label>{{ form.temperature.label }}</label>
+                {{ form.temperature }}
+            </div>
+
+            <div>
+                <label>{{ form.weight.label }}</label>
+                {{ form.weight }}
+            </div>
+
+            <div>
+                <label>{{ form.height.label }}</label>
+                {{ form.height }}
+            </div>
+
+            <div>
+                <label>{{ form.blood_sugar.label }}</label>
+                {{ form.blood_sugar }}
+            </div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn">حفظ وإرسال للطبيب</button>
+</form>
+
+<a href="{% url 'patient_detail' patient.id %}" class="btn btn-secondary">إلغاء</a>
+{% endblock %}

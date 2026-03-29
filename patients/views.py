@@ -282,11 +282,16 @@ def patient_detail(request, id):
     ).order_by('-created_at').first()
 
     visits = None
+    sort_order = request.GET.get('sort', 'newest')
     if is_doctor(request.user):
-        visits = Visit.objects.filter(
+        visits_query = Visit.objects.filter(
             patient=patient,
             status='doctor_completed'
-        ).order_by('-created_at')
+        )
+        if sort_order == 'oldest':
+            visits = visits_query.order_by('created_at')
+        else:
+            visits = visits_query.order_by('-created_at')
 
     return render(request, 'patients/patient_detail.html', {
         'patient': patient,
@@ -294,6 +299,7 @@ def patient_detail(request, id):
         'visits': visits,
         'is_doctor': is_doctor(request.user),
         'is_nurse': is_nurse(request.user),
+        'sort_order': sort_order,
     })
 
 
@@ -463,6 +469,18 @@ def login_view(request):
 
         if user is not None:
             login(request, user)
+
+            # احتفظ بجلسة واحدة نشطة لكل مستخدم
+            from django.contrib.sessions.models import Session
+            from django.utils import timezone
+            
+            current_session_key = request.session.session_key
+            for session in Session.objects.filter(expire_date__gte=timezone.now()):
+                if session.session_key != current_session_key:
+                    data = session.get_decoded()
+                    if str(data.get('_auth_user_id', '')) == str(user.id):
+                        session.delete()
+
             return redirect('dashboard')
         else:
             return render(request, 'patients/login.html', {'error': 'اسم المستخدم أو كلمة المرور غير صحيحة'})

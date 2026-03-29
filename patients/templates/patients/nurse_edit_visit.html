@@ -1,0 +1,66 @@
+{% extends 'patients/base.html' %}
+
+{% block title %}تعديل الزيارة التمريضية{% endblock %}
+
+{% block content %}
+<h1>تعديل الزيارة التمريضية للمريض: {{ visit.patient.name }}</h1>
+
+<form method="post">
+    {% csrf_token %}
+
+    <div class="card">
+        <h3>معلومات الزيارة</h3>
+        <p><strong>نوع الزيارة:</strong> {{ visit.get_visit_type_display }}</p>
+        <p><strong>الطبيب المعالج:</strong> {{ visit.assigned_doctor.first_name }} {{ visit.assigned_doctor.last_name|default:"غير محدد" }}</p>
+    </div>
+    
+    <div class="card">
+        <h3>البيانات التمريضية</h3>
+
+        <label for="chief_complaint">الشكوى الرئيسية</label>
+        <textarea name="chief_complaint" id="chief_complaint">{{ visit.chief_complaint }}</textarea>
+
+        <label for="nursing_notes">ملاحظات تمريضية</label>
+        <textarea name="nursing_notes" id="nursing_notes">{{ visit.nursing_notes }}</textarea>
+    </div>
+
+    <div class="card">
+        <h3>العلامات الحيوية</h3>
+        <div class="form-grid">
+            <div>
+                <label for="blood_pressure">ضغط الدم</label>
+                <input type="text" name="blood_pressure" id="blood_pressure" value="{{ visit.blood_pressure }}">
+            </div>
+
+            <div>
+                <label for="pulse">النبض</label>
+                <input type="text" name="pulse" id="pulse" value="{{ visit.pulse }}">
+            </div>
+
+            <div>
+                <label for="temperature">الحرارة</label>
+                <input type="text" name="temperature" id="temperature" value="{{ visit.temperature }}">
+            </div>
+
+            <div>
+                <label for="weight">الوزن</label>
+                <input type="text" name="weight" id="weight" value="{{ visit.weight }}">
+            </div>
+
+            <div>
+                <label for="height">الطول</label>
+                <input type="text" name="height" id="height" value="{{ visit.height }}">
+            </div>
+
+            <div>
+                <label for="blood_sugar">سكر الدم</label>
+                <input type="text" name="blood_sugar" id="blood_sugar" value="{{ visit.blood_sugar }}">
+            </div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn">حفظ التعديلات</button>
+</form>
+
+<a href="{% url 'patient_detail' visit.patient.id %}" class="btn btn-secondary">إلغاء</a>
+{% endblock %}

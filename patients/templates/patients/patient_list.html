@@ -26,17 +26,9 @@
         transform: translateY(-3px);
     }
 
-    .patient-card-link {
-        position: absolute;
-        inset: 0;
-        z-index: 1;
-        text-indent: -9999px;
-    }
 
     .patient-card h2,
     .patient-card p {
-        position: relative;
-        z-index: 2;
         margin-top: 0;
     }
 
@@ -50,17 +42,6 @@
         margin-bottom: 6px;
     }
 
-    .actions {
-        position: relative;
-        z-index: 3;
-        margin-top: 10px;
-    }
-
-    .actions a {
-        margin-left: 10px;
-        text-decoration: none;
-        font-weight: bold;
-    }
 
     /* ألوان حسب الحالة */
     .patient-completed {
@@ -99,12 +80,7 @@
 
 <div class="patient-grid">
     {% for item in patients_with_status %}
-        <div class="patient-card {{ item.card_class }}">
-
-            <!-- الرابط المخفي -->
-            <a href="{% url 'patient_detail' item.patient.id %}" class="patient-card-link">
-                فتح
-            </a>
+        <a href="{% url 'patient_detail' item.patient.id %}" class="patient-card {{ item.card_class }}" style="text-decoration: none; color: inherit; display: block;">
 
             <h2>{{ item.patient.name }}</h2>
 
@@ -117,15 +93,8 @@
                 <strong>الحالة:</strong> {{ item.visit_status }}
             </p>
 
-            <div class="actions">
-                <a href="{% url 'edit_patient' item.patient.id %}">تعديل</a>
+        </a>   
 
-                {% if request.user.groups.all.0.name == "Doctor" %}
-                    <a href="{% url 'delete_patient' item.patient.id %}">حذف</a>
-                {% endif %}
-            </div>
-
-        </div>
     {% empty %}
         <p>لا يوجد مرضى مطابقون للبحث.</p>
     {% endfor %}

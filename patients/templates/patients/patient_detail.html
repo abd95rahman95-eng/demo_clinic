@@ -13,10 +13,10 @@
     <p><strong>العنوان:</strong> {{ patient.address }}</p>
 
     <div class="actions" style="margin-top: 15px;">
-        <a href="{% url 'edit_patient' patient.id %}">✏️ تعديل بيانات المريض</a>
+        <a href="{% url 'edit_patient' patient.id %}" class="btn">✏️ تعديل بيانات المريض</a>
 
         {% if is_doctor %}
-            <a href="{% url 'delete_patient' patient.id %}">🗑️ حذف المريض</a>
+            <a href="{% url 'delete_patient' patient.id %}" class="btn">🗑️ حذف المريض</a>
         {% endif %}
     </div>
 </div>
@@ -55,17 +55,34 @@
     <div class="card" style="background: linear-gradient(135deg, #fff8e1, #ffe082);">
         <h2 style="margin-bottom: 15px;">زيارة معلقة بانتظار الإكمال</h2>
 
-        <p><strong>نوع الزيارة:</strong> {{ pending_visit.get_visit_type_display }}</p>
-        <p><strong>الشكوى الرئيسية:</strong> {{ pending_visit.chief_complaint|default:"—" }}</p>
-        <p><strong>ملاحظات تمريضية:</strong> {{ pending_visit.nursing_notes|default:"—" }}</p>
+            <p><strong>نوع الزيارة:</strong> {{ pending_visit.get_visit_type_display }}</p>
+            {% if pending_visit.chief_complaint %}
+            <p><strong>الشكوى الرئيسية:</strong> {{ pending_visit.chief_complaint }}</p>
+            {% endif %}
+            {% if pending_visit.nursing_notes %}
+            <p><strong>ملاحظات تمريضية:</strong> {{ pending_visit.nursing_notes }}</p>
+            {% endif %}
 
         <div class="form-grid" style="margin-top: 10px;">
-            <div><p><strong>ضغط الدم:</strong> {{ pending_visit.blood_pressure|default:"—" }}</p></div>
-            <div><p><strong>النبض:</strong> {{ pending_visit.pulse|default:"—" }}</p></div>
-            <div><p><strong>الحرارة:</strong> {{ pending_visit.temperature|default:"—" }}</p></div>
-            <div><p><strong>الوزن:</strong> {{ pending_visit.weight|default:"—" }}</p></div>
-            <div><p><strong>الطول:</strong> {{ pending_visit.height|default:"—" }}</p></div>
-            <div><p><strong>سكر الدم:</strong> {{ pending_visit.blood_sugar|default:"—" }}</p></div>
+                <div class="form-grid" style="margin-top: 10px;">
+                    {% if pending_visit.blood_pressure %}
+                    <div><p><strong>ضغط الدم:</strong> {{ pending_visit.blood_pressure }}</p></div>
+                    {% endif %}
+                    {% if pending_visit.pulse %}
+                    <div><p><strong>النبض:</strong> {{ pending_visit.pulse }}</p></div>
+                    {% endif %}
+                    {% if pending_visit.temperature %}
+                    <div><p><strong>الحرارة:</strong> {{ pending_visit.temperature }}</p></div>
+                    {% endif %}
+                    {% if pending_visit.weight %}
+                    <div><p><strong>الوزن:</strong> {{ pending_visit.weight }}</p></div>{% endif %}
+                    {% if pending_visit.height %}
+                    <div></div><p><strong>الطول:</strong> {{ pending_visit.height }}</p></div>
+                    {% endif %}
+                    {% if pending_visit.blood_sugar %}
+                    <div><p><strong>سكر الدم:</strong> {{ pending_visit.blood_sugar }}</p></div>
+                    {% endif %}
+                </div>
         </div>
 
         <div class="actions" style="margin-top: 15px;">
@@ -75,7 +92,27 @@
 {% endif %}
 
 {% if is_doctor %}
-    <h2 style="margin-top: 25px;">الزيارات المكتملة</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; margin-bottom: 15px;">
+        <h2 style="margin: 0;">الزيارات المكتملة</h2>
+
+        <form method="get" style="display: flex; gap: 10px; align-items: center; margin: 0;">
+                <label for="sort" style="margin: 0; font-weight: bold;">ترتيب:</label>
+            <select name="sort" id="sort" onchange="this.form.submit()"
+                style="padding: 8px; border-radius: 5px; border: 1px solid #ccc; font-family: inherit; font-size: 14px;">
+                {% if sort_order == 'newest' %}
+                <option value="newest" selected>الأحدث أولاً</option>
+                {% else %}
+                <option value="newest">الأحدث أولاً</option>
+                {% endif %}
+
+                {% if sort_order == 'oldest' %}
+                <option value="oldest" selected>الأقدم أولاً</option>
+                {% else %}
+                <option value="oldest">الأقدم أولاً</option>
+                {% endif %}
+            </select>
+         </form>
+    </div>
 
     {% if visits %}
         {% for visit in visits %}

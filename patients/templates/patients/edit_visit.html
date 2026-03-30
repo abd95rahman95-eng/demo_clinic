@@ -82,7 +82,7 @@
                 <label>{{ form.patient_instructions.label }}</label>
                 {{ form.patient_instructions }}
             </div>
-            
+
             <div class="full-width">
                 <label>{{ form.prescription.label }}</label>
                 {{ form.prescription }}
@@ -100,4 +100,31 @@
 </form>
 
 <a href="{% url 'patient_detail' visit.patient.id %}" class="btn btn-secondary">إلغاء</a>
+
+<style>
+    textarea {
+        resize: none;
+        overflow: hidden;
+        min-height: 60px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('textarea').forEach(function (textarea) {
+            // Set initial height to fit existing content on page load
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+
+            // Expand as user types
+            textarea.addEventListener('input', function () {
+                this.style.height = 'auto';
+                this.style.height = this.scrollHeight + 'px';
+            });
+        });
+    });
+</script>
+
 {% endblock %}

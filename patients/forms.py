@@ -105,6 +105,8 @@ class DoctorVisitForm(forms.ModelForm):
             'patient_instructions',
             'follow_up_date',
             'doctor_notes',
+            'lab_results',
+            'imaging_results',
         ]
         labels = {
             'history_of_present_illness': 'القصة المرضية الحالية',
@@ -117,10 +119,12 @@ class DoctorVisitForm(forms.ModelForm):
             'patient_instructions': 'تعليمات للمريض',
             'follow_up_date': 'موعد المراجعة القادم',
             'doctor_notes': 'ملاحظات الطبيب',
+            'lab_results': 'نتائج التحاليل',
+            'imaging_results': 'نتائج الصور',
         }
         widgets = {
-            'history_of_present_illness': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-            'clinical_examination': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'history_of_present_illness': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'clinical_examination': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'diagnosis': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'treatment_plan': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'prescription': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
@@ -129,4 +133,6 @@ class DoctorVisitForm(forms.ModelForm):
             'patient_instructions': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'follow_up_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'doctor_notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'lab_results': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'imaging_results': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }

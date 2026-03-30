@@ -47,12 +47,36 @@
                 {{ form.clinical_examination }}
             </div>
             <div class="full-width">
+                <label>{{ form.lab_requests.label }}</label>
+                {{ form.lab_requests }}
+            </div>
+            <div class="full-width">
+                <label>{{ form.lab_results.label }}</label>
+                {{ form.lab_results }}
+            </div>
+            <div class="full-width">
+                <label>{{ form.imaging_requests.label }}</label>
+                {{ form.imaging_requests }}
+            </div>
+            <div class="full-width">
+                <label>{{ form.imaging_results.label }}</label>
+                {{ form.imaging_results }}
+            </div>
+            <div class="full-width">
+                <label>{{ form.doctor_notes.label }}</label>
+                {{ form.doctor_notes }}
+            </div>
+            <div class="full-width">
                 <label>{{ form.diagnosis.label }}</label>
                 {{ form.diagnosis }}
             </div>
             <div class="full-width">
                 <label>{{ form.treatment_plan.label }}</label>
                 {{ form.treatment_plan }}
+            </div>
+            <div class="full-width">
+                <label>{{ form.patient_instructions.label }}</label>
+                {{ form.patient_instructions }}
             </div>
             <div class="full-width">
                 <label>{{ form.prescription.label }}</label>
@@ -62,22 +86,6 @@
                 <label>{{ form.follow_up_date.label }}</label>
                 {{ form.follow_up_date }}
             </div>
-            <div class="full-width">
-                <label>{{ form.lab_requests.label }}</label>
-                {{ form.lab_requests }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.imaging_requests.label }}</label>
-                {{ form.imaging_requests }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.patient_instructions.label }}</label>
-                {{ form.patient_instructions }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.doctor_notes.label }}</label>
-                {{ form.doctor_notes }}
-            </div>
         </div>
     </div>
 
@@ -85,4 +93,31 @@
 </form>
 
 <a href="{% url 'doctor_pending_visits' %}" class="btn btn-secondary">إلغاء</a>
+
+<style>
+    textarea {
+        resize: none;
+        overflow: hidden;
+        min-height: 60px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('textarea').forEach(function (textarea) {
+            // Set initial height to fit existing content on page load
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+
+            // Expand as user types
+            textarea.addEventListener('input', function () {
+                this.style.height = 'auto';
+                this.style.height = this.scrollHeight + 'px';
+            });
+        });
+    });
+</script>
+
 {% endblock %}

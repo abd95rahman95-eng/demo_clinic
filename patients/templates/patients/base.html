@@ -468,7 +468,8 @@
 
         <div>
             {% if request.user.is_authenticated %}
-                <a href="{% url 'dashboard' %}">العيادة</a>
+                <a href="{% url 'dashboard' %}">الصفحة الرئيسية</a>
+                <span style="margin-left: 15px;">|</span>
                 <a href="{% url 'patient_list' %}">المرضى</a>
 
                 {% if request.user.groups.all.0.name == "Nurse" %}

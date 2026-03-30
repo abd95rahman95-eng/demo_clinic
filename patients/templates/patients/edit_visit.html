@@ -44,6 +44,26 @@
             </div>
 
             <div class="full-width">
+                <label>{{ form.lab_requests.label }}</label>
+                {{ form.lab_requests }}
+            </div>
+
+            <div class="full-width">
+                <label>{{ form.lab_results.label }}</label>
+                {{ form.lab_results }}
+            </div>
+
+            <div class="full-width">
+                <label>{{ form.imaging_results.label }}</label>
+                {{ form.imaging_results }}
+            </div>
+
+            <div class="full-width">
+                <label>{{ form.imaging_requests.label }}</label>
+                {{ form.imaging_requests }}
+            </div>
+
+            <div class="full-width">
                 <label>{{ form.diagnosis.label }}</label>
                 {{ form.diagnosis }}
             </div>
@@ -52,7 +72,17 @@
                 <label>{{ form.treatment_plan.label }}</label>
                 {{ form.treatment_plan }}
             </div>
+            
+            <div class="full-width">
+                <label>{{ form.doctor_notes.label }}</label>
+                {{ form.doctor_notes }}
+            </div>
 
+            <div class="full-width">
+                <label>{{ form.patient_instructions.label }}</label>
+                {{ form.patient_instructions }}
+            </div>
+            
             <div class="full-width">
                 <label>{{ form.prescription.label }}</label>
                 {{ form.prescription }}
@@ -63,25 +93,6 @@
                 {{ form.follow_up_date }}
             </div>
 
-            <div class="full-width">
-                <label>{{ form.lab_requests.label }}</label>
-                {{ form.lab_requests }}
-            </div>
-
-            <div class="full-width">
-                <label>{{ form.imaging_requests.label }}</label>
-                {{ form.imaging_requests }}
-            </div>
-
-            <div class="full-width">
-                <label>{{ form.patient_instructions.label }}</label>
-                {{ form.patient_instructions }}
-            </div>
-
-            <div class="full-width">
-                <label>{{ form.doctor_notes.label }}</label>
-                {{ form.doctor_notes }}
-            </div>
         </div>
     </div>
 

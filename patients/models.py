@@ -90,6 +90,8 @@ class Visit(models.Model):
     patient_instructions = models.TextField(blank=True)
     follow_up_date = models.DateField(null=True, blank=True)
     doctor_notes = models.TextField(blank=True)
+    lab_results = models.TextField(blank=True)
+    imaging_results = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

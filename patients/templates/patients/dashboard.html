@@ -1,31 +1,28 @@
 {% extends 'patients/base.html' %}
 
-{% block title %} الصفحة الرئيسية{% endblock %}
+{% block title %} العيادة{% endblock %}
 
 {% block content %}
+
+
+<!-- ── Clinic header ── -->
 <div class="clinic-header-card">
-
-    <div class="welcome-text">
-        أهلاً بك {{ request.user.username }} 👋
-    </div>
-
-    <div class="clinic-name">
-      عيادة  {{ clinic_name }} 
-    </div>
-
+    <div class="welcome-text">أهلاً بك {{ request.user.username }} 👋</div>
+    <div class="clinic-name">عيادة {{ clinic_name }}</div>
     <div class="clinic-meta">
         <span>الدور: {{ user_role }}</span>
-        <span> | </span>
-        <span>اليوم: {{ formatted_date }} </span>
+        <span>|</span>
+        <span>اليوم: {{ formatted_date }}</span>
     </div>
-
 </div>
 
+
+<!-- ── Top action cards ── -->
 <div class="top-action-grid">
 
     <a href="{% url 'patient_list' %}" class="action-card-link">
         <div class="action-card action-patients">
-            <div class="action-card-title">المرضى</div>
+            <div class="action-card-title">👥 المرضى</div>
             <div class="action-card-subtitle">عرض وإدارة قائمة المرضى</div>
         </div>
     </a>
@@ -33,43 +30,42 @@
     {% if is_doctor %}
         <a href="{% url 'doctor_pending_visits' %}" class="action-card-link">
             <div class="action-card action-pending">
-                <div class="action-card-title">الزيارات المعلقة</div>
-                <div class="action-card-subtitle"> بانتظار الإكمال</div>
+                <div class="action-card-title">⏳ الزيارات المعلقة</div>
+                <div class="action-card-subtitle">بانتظار الإكمال</div>
             </div>
         </a>
     {% elif is_nurse %}
         <a href="{% url 'waiting_list' %}" class="action-card-link">
             <div class="action-card action-pending">
-                <div class="action-card-title">قائمة الانتظار</div>
+                <div class="action-card-title">🕐 قائمة الانتظار</div>
                 <div class="action-card-subtitle">المرضى المنتظرون حاليًا</div>
             </div>
         </a>
     {% endif %}
 
     <div class="action-card action-reports action-card-disabled">
-        <div class="action-card-title">التقارير</div>
+        <div class="action-card-title">📊 التقارير</div>
         <div class="action-card-subtitle">قريبًا</div>
     </div>
 
 </div>
 
 
+<!-- ── Bottom list cards ── -->
 <div class="bottom-cards-grid">
 
+    <!-- Latest patients -->
     <div class="dashboard-list-card">
-        <div class="dashboard-list-title">آخر المرضى</div>
-
+        <div class="dashboard-list-title">🕐 آخر المرضى</div>
         {% if latest_patients %}
             <ul class="dashboard-list">
                 {% for patient in latest_patients %}
-                    <li>
-                        <a href="{% url 'patient_detail' patient.id %}">
-                            {{ patient.name }}
-                        </a>
-                        <div class="dashboard-item-sub">
-                            رقم الملف: {{ patient.file_number }} | الهاتف: {{ patient.phone }}
-                        </div>
-                    </li>
+                <li>
+                    <a href="{% url 'patient_detail' patient.id %}">{{ patient.name }}</a>
+                    <div class="dashboard-item-sub">
+                        رقم الملف: {{ patient.file_number }} | الهاتف: {{ patient.phone }}
+                    </div>
+                </li>
                 {% endfor %}
             </ul>
         {% else %}
@@ -77,21 +73,19 @@
         {% endif %}
     </div>
 
+    <!-- Pending visits (doctor) / Waiting list (nurse) -->
     {% if is_doctor %}
     <div class="dashboard-list-card">
-        <div class="dashboard-list-title">آخر الزيارات المعلقة</div>
-
+        <div class="dashboard-list-title">⏳ آخر الزيارات المعلقة</div>
         {% if latest_pending_visits %}
             <ul class="dashboard-list">
                 {% for visit in latest_pending_visits %}
-                    <li>
-                        <a href="{% url 'doctor_complete_visit' visit.id %}">
-                            {{ visit.patient.name }}
-                        </a>
-                        <div class="dashboard-item-sub">
-                            {{ visit.chief_complaint|default:"بدون شكوى" }} | الطبيب: {{ visit.assigned_doctor.username|default:"—" }}
-                        </div>
-                    </li>
+                <li>
+                    <a href="{% url 'doctor_complete_visit' visit.id %}">{{ visit.patient.name }}</a>
+                    <div class="dashboard-item-sub">
+                        {{ visit.chief_complaint|default:"بدون شكوى" }} | الطبيب: {{ visit.assigned_doctor.username|default:"—" }}
+                    </div>
+                </li>
                 {% endfor %}
             </ul>
         {% else %}
@@ -100,19 +94,16 @@
     </div>
     {% elif is_nurse %}
     <div class="dashboard-list-card">
-        <div class="dashboard-list-title">قائمة الانتظار الحالية</div>
-
+        <div class="dashboard-list-title">🕐 قائمة الانتظار الحالية</div>
         {% if latest_pending_visits %}
             <ul class="dashboard-list">
                 {% for visit in latest_pending_visits %}
-                    <li>
-                        <a href="{% url 'patient_detail' visit.patient.id %}">
-                            {{ visit.patient.name }}
-                        </a>
-                        <div class="dashboard-item-sub">
-                            {{ visit.chief_complaint|default:"بدون شكوى" }} | الطبيب: {{ visit.assigned_doctor.username|default:"—" }}
-                        </div>
-                    </li>
+                <li>
+                    <a href="{% url 'patient_detail' visit.patient.id %}">{{ visit.patient.name }}</a>
+                    <div class="dashboard-item-sub">
+                        {{ visit.chief_complaint|default:"بدون شكوى" }} | الطبيب: {{ visit.assigned_doctor.username|default:"—" }}
+                    </div>
+                </li>
                 {% endfor %}
             </ul>
         {% else %}
@@ -121,38 +112,47 @@
     </div>
     {% endif %}
 
+    <!-- Next patient -->
     <div class="dashboard-list-card">
-    <div class="dashboard-list-title">المريض التالي</div>
+        <div class="dashboard-list-title">👤 المريض التالي</div>
 
-    {% if next_patient_visit %}
-        <div style="padding: 10px 15px 0 0;">
-            <h2 style="margin-bottom: 12px; color: #1f2d3d;">
-                {{ next_patient_visit.patient.name }}
-            </h2>
+        {% if next_patient_visit %}
+            <div class="next-patient-body">
+                <div class="next-patient-name">{{ next_patient_visit.patient.name }}</div>
 
-            <p><strong>رقم الملف:</strong> {{ next_patient_visit.patient.file_number }}</p>
-            <p><strong>الشكوى الرئيسية:</strong> {{ next_patient_visit.chief_complaint|default:"—" }}</p>
-            <p><strong>الطبيب:</strong> {{ next_patient_visit.assigned_doctor.username|default:"—" }}</p>
-            <p><strong>وقت الإدخال:</strong> {{ next_patient_visit.created_at|time:"H:i" }}</p>
+                <div class="next-patient-field">
+                    <strong>رقم الملف:</strong>
+                    <span>{{ next_patient_visit.patient.file_number }}</span>
+                </div>
+                <div class="next-patient-field">
+                    <strong>الشكوى الرئيسية:</strong>
+                    <span>{{ next_patient_visit.chief_complaint|default:"—" }}</span>
+                </div>
+                <div class="next-patient-field">
+                    <strong>الطبيب:</strong>
+                    <span>{{ next_patient_visit.assigned_doctor.username|default:"—" }}</span>
+                </div>
+                <div class="next-patient-field">
+                    <strong>وقت الإدخال:</strong>
+                    <span>{{ next_patient_visit.created_at|time:"H:i" }}</span>
+                </div>
 
-            <div class="actions" style="margin-top: 15px;">
-                <a href="{% url 'patient_detail' next_patient_visit.patient.id %}" class="btn btn-secondary">
-                    ملف المريض
-                </a>
-
-                {% if is_doctor %}
-                    <a href="{% url 'doctor_complete_visit' next_patient_visit.id %}" class="btn">
+                <div class="next-patient-actions">
+                    <a href="{% url 'patient_detail' next_patient_visit.patient.id %}" class="btn btn-outline-green">
+                        ملف المريض
+                    </a>
+                    {% if is_doctor %}
+                    <a href="{% url 'doctor_complete_visit' next_patient_visit.id %}" class="btn btn-primary-green">
                         إكمال الزيارة
                     </a>
-                {% endif %}
+                    {% endif %}
+                </div>
             </div>
-        </div>
-    {% else %}
-        <p>لا يوجد مريض بانتظار الدخول حاليًا.</p>
-    {% endif %}
-</div>
+        {% else %}
+            <div class="no-next-patient">لا يوجد مريض بانتظار الدخول حاليًا.</div>
+        {% endif %}
+    </div>
 
 </div>
-
 
 {% endblock %}

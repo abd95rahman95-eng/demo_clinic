@@ -3,106 +3,124 @@
 {% block title %}إكمال الزيارة{% endblock %}
 
 {% block content %}
-<h1>إكمال الزيارة للمريض: {{ visit.patient.name }}</h1>
 
-<div class="card">
-    <h3>البيانات التمريضية</h3>
-    <div class="form-grid">
-        <div><p><strong>نوع الزيارة:</strong> {{ visit.get_visit_type_display }}</p></div>
-            <div><p><strong>ضغط الدم:</strong> {{ visit.blood_pressure }}</p></div>
-            <div><p><strong>النبض:</strong> {{ visit.pulse }}</p></div>
-            <div><p><strong>الحرارة:</strong> {{ visit.temperature }}</p></div>
-            <div><p><strong>الوزن:</strong> {{ visit.weight }}</p></div>
-            <div><p><strong>الطول:</strong> {{ visit.height }}</p></div>
-            <div><p><strong>سكر الدم:</strong> {{ visit.blood_sugar }}</p></div>
-        <div class="full-width"><p><strong>الشكوى الرئيسية:</strong> {{ visit.chief_complaint }}</p></div>
-        <div class="full-width"><p><strong>ملاحظات تمريضية:</strong> {{ visit.nursing_notes }}</p></div>
+<div class="patient-view-wrapper">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+        <h1 style="margin: 0; font-size: 28px; color: #1e293b; font-weight: 800;">إكمال الزيارة: {{ visit.patient.name }}</h1>
+    </div>
+
+    <!-- Nursing Data (Readonly) -->
+    <div class="ui-form-card" style="padding: 25px 30px;">
+        <div class="ui-subsection" style="padding:0;">
+            <div class="ui-sub-title nursing-title" style="margin-bottom: 20px;">القسم التمريضي لزيارة ({{ visit.get_visit_type_display }})</div>
+            
+            {% if visit.chief_complaint %}
+            <div class="field-row">
+                <span class="field-label">الشكوى الرئيسية:</span>
+                <span class="field-value">{{ visit.chief_complaint }}</span>
+            </div>
+            {% endif %}
+
+            {% if visit.nursing_notes %}
+            <div class="field-row">
+                <span class="field-label">ملاحظات تمريضية:</span>
+                <span class="field-value">{{ visit.nursing_notes }}</span>
+            </div>
+            {% endif %}
+
+            {% if visit.blood_pressure or visit.pulse or visit.temperature or visit.weight or visit.height or visit.blood_sugar %}
+            <div class="vitals-grid">
+                {% if visit.blood_pressure %}<div class="vital-box"><div class="vital-label">ضغط الدم</div><div class="vital-value">{{ visit.blood_pressure }}</div></div>{% endif %}
+                {% if visit.pulse %}<div class="vital-box"><div class="vital-label">النبض</div><div class="vital-value">{{ visit.pulse }}</div></div>{% endif %}
+                {% if visit.temperature %}<div class="vital-box"><div class="vital-label">الحرارة</div><div class="vital-value">{{ visit.temperature }}</div></div>{% endif %}
+                {% if visit.weight %}<div class="vital-box"><div class="vital-label">الوزن</div><div class="vital-value">{{ visit.weight }}</div></div>{% endif %}
+                {% if visit.height %}<div class="vital-box"><div class="vital-label">الطول</div><div class="vital-value">{{ visit.height }}</div></div>{% endif %}
+                {% if visit.blood_sugar %}<div class="vital-box"><div class="vital-label">سكر الدم</div><div class="vital-value">{{ visit.blood_sugar }}</div></div>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Doctor Form -->
+    <div class="ui-form-card">
+        <form method="post">
+            {% csrf_token %}
+
+            {% if form.errors %}
+            <div class="error-card">
+                <h3>⚠️ يوجد خطأ في البيانات</h3>
+                {{ form.errors }}
+            </div>
+            {% endif %}
+
+            <div class="section-title">القسم الطبي وملاحظات الطبيب</div>
+            <div class="form-grid-layout">
+                <div class="form-group full-width">
+                    <label>{{ form.history_of_present_illness.label }}</label>
+                    {{ form.history_of_present_illness }}
+                </div>
+
+                <div class="form-group full-width">
+                    <label>{{ form.clinical_examination.label }}</label>
+                    {{ form.clinical_examination }}
+                </div>
+
+                <div class="form-group full-width">
+                    <label>{{ form.lab_requests.label }}</label>
+                    {{ form.lab_requests }}
+                </div>
+
+                <div class="form-group full-width">
+                    <label>{{ form.lab_results.label }}</label>
+                    {{ form.lab_results }}
+                </div>
+
+                <div class="form-group full-width">
+                    <label>{{ form.imaging_requests.label }}</label>
+                    {{ form.imaging_requests }}
+                </div>
+                <div class="form-group full-width">
+                    <label>{{ form.imaging_results.label }}</label>
+                    {{ form.imaging_results }}
+                </div>
+
+                <div class="form-group full-width">
+                    <label>{{ form.doctor_notes.label }}</label>
+                    {{ form.doctor_notes }}
+                </div>
+
+                <div class="form-group full-width">
+                    <label>{{ form.diagnosis.label }}</label>
+                    {{ form.diagnosis }}
+                </div>
+
+                <div class="form-group full-width">
+                    <label>{{ form.treatment_plan.label }}</label>
+                    {{ form.treatment_plan }}
+                </div>
+
+                <div class="form-group full-width">
+                    <label>{{ form.patient_instructions.label }}</label>
+                    {{ form.patient_instructions }}
+                </div>
+                <div class="form-group full-width">
+                    <label>{{ form.prescription.label }}</label>
+                    {{ form.prescription }}
+                </div>
+
+                <div class="form-group">
+                    <label>{{ form.follow_up_date.label }}</label>
+                    {{ form.follow_up_date }}
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-submit">حفظ كزيارة مكتملة</button>
+                <a href="{% url 'doctor_pending_visits' %}" class="btn-cancel">إلغاء</a>
+            </div>
+        </form>
     </div>
 </div>
-
-<form method="post">
-    {% csrf_token %}
-
-    {% if form.errors %}
-        <div class="card" style="border:1px solid #b02a37; background:#fff5f5;">
-            <h3 style="color:#b02a37;">يوجد خطأ في البيانات</h3>
-            {{ form.errors }}
-        </div>
-    {% endif %}
-
-    <div class="card">
-        <h3>القسم الطبي</h3>
-        <div class="form-grid">
-            <div class="full-width">
-                            
-                <label>{{ form.history_of_present_illness.label }}</label>
-                {{ form.history_of_present_illness }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.past_medical_history.label }}</label>
-                {{ form.past_medical_history }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.clinical_examination.label }}</label>
-                {{ form.clinical_examination }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.lab_requests.label }}</label>
-                {{ form.lab_requests }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.lab_results.label }}</label>
-                {{ form.lab_results }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.imaging_requests.label }}</label>
-                {{ form.imaging_requests }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.imaging_results.label }}</label>
-                {{ form.imaging_results }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.doctor_notes.label }}</label>
-                {{ form.doctor_notes }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.diagnosis.label }}</label>
-                {{ form.diagnosis }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.treatment_plan.label }}</label>
-                {{ form.treatment_plan }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.patient_instructions.label }}</label>
-                {{ form.patient_instructions }}
-            </div>
-            <div class="full-width">
-                <label>{{ form.prescription.label }}</label>
-                {{ form.prescription }}
-            </div>
-            <div>
-                <label>{{ form.follow_up_date.label }}</label>
-                {{ form.follow_up_date }}
-            </div>
-        </div>
-    </div>
-
-    <button type="submit" class="btn">حفظ كزيارة مكتملة</button>
-</form>
-
-<a href="{% url 'doctor_pending_visits' %}" class="btn btn-secondary">إلغاء</a>
-
-<style>
-    textarea {
-        resize: none;
-        overflow: hidden;
-        min-height: 60px;
-        width: 100%;
-        box-sizing: border-box;
-    }
-</style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {

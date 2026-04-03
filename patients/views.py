@@ -300,6 +300,7 @@ def patient_detail(request, id):
         'is_doctor': is_doctor(request.user),
         'is_nurse': is_nurse(request.user),
         'sort_order': sort_order,
+        'clinic_name': profile.clinic.name,
     })
 
 

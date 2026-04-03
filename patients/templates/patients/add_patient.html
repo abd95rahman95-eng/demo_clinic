@@ -3,30 +3,53 @@
 {% block title %}إضافة مريض{% endblock %}
 
 {% block content %}
-<h1>إضافة مريض جديد</h1>
 
-<form method="post" action="{% url 'add_patient' %}">
-    {% csrf_token %}
 
-    {% if form.errors %}
-        <div class="card" style="border:1px solid #b02a37; background:#fff5f5;">
-            <h3 style="color:#b02a37;">يوجد خطأ في البيانات</h3>
-            {{ form.errors }}
-        </div>
-    {% endif %}
+<div class="patient-view-wrapper">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+        <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">إضافة مريض جديد</h1>
+    </div>
 
-    <label>{{ form.name.label }}</label>
-    {{ form.name }}
+    <div class="ui-form-card">
+        <form method="post" action="{% url 'add_patient' %}">
+            {% csrf_token %}
 
-    <label>{{ form.age.label }}</label>
-    {{ form.age }}
+            {% if form.errors %}
+                <div class="error-card">
+                    <h3>⚠️ يوجد خطأ في البيانات</h3>
+                    {{ form.errors }}
+                </div>
+            {% endif %}
 
-    <label>{{ form.phone.label }}</label>
-    {{ form.phone }}
+            <div class="section-title">بيانات المريض الأساسية</div>
 
-    <label>{{ form.address.label }}</label>
-    {{ form.address }}
+            <div class="form-grid-layout">
+                <div class="form-group">
+                    <label>{{ form.name.label }}</label>
+                    {{ form.name }}
+                </div>
 
-    <button type="submit" class="btn">إضافة</button>
-</form>
+                <div class="form-group">
+                    <label>{{ form.age.label }}</label>
+                    {{ form.age }}
+                </div>
+
+                <div class="form-group">
+                    <label>{{ form.phone.label }}</label>
+                    {{ form.phone }}
+                </div>
+
+                <div class="form-group full-width">
+                    <label>{{ form.address.label }}</label>
+                    {{ form.address }}
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-submit">إضافة المريض</button>
+                <a href="{% url 'patient_list' %}" class="btn-cancel">إلغاء</a>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}

@@ -3,64 +3,103 @@
 {% block title %}تعديل الزيارة التمريضية{% endblock %}
 
 {% block content %}
-<h1>تعديل الزيارة التمريضية للمريض: {{ visit.patient.name }}</h1>
 
-<form method="post">
-    {% csrf_token %}
 
-    <div class="card">
-        <h3>معلومات الزيارة</h3>
-        <p><strong>نوع الزيارة:</strong> {{ visit.get_visit_type_display }}</p>
-        <p><strong>الطبيب المعالج:</strong> {{ visit.assigned_doctor.first_name }} {{ visit.assigned_doctor.last_name|default:"غير محدد" }}</p>
-    </div>
-    
-    <div class="card">
-        <h3>البيانات التمريضية</h3>
-
-        <label for="chief_complaint">الشكوى الرئيسية</label>
-        <textarea name="chief_complaint" id="chief_complaint">{{ visit.chief_complaint }}</textarea>
-
-        <label for="nursing_notes">ملاحظات تمريضية</label>
-        <textarea name="nursing_notes" id="nursing_notes">{{ visit.nursing_notes }}</textarea>
+<div class="patient-view-wrapper">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+        <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تعديل الزيارة التمريضية للمريض: {{ visit.patient.name }}</h1>
     </div>
 
-    <div class="card">
-        <h3>العلامات الحيوية</h3>
-        <div class="form-grid">
-            <div>
-                <label for="blood_pressure">ضغط الدم</label>
-                <input type="text" name="blood_pressure" id="blood_pressure" value="{{ visit.blood_pressure }}">
+    <div class="ui-form-card">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="section-title">معلومات الزيارة</div>
+            <div class="form-grid-layout">
+                <div class="form-group">
+                    <label>نوع الزيارة</label>
+                    <div class="readonly-field">
+                        {{ visit.get_visit_type_display }}
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>الطبيب المعالج</label>
+                    <div class="readonly-field">
+                        {{ visit.assigned_doctor.first_name }} {{ visit.assigned_doctor.last_name|default:"غير محدد" }}
+                    </div>
+                </div>
             </div>
 
-            <div>
-                <label for="pulse">النبض</label>
-                <input type="text" name="pulse" id="pulse" value="{{ visit.pulse }}">
+            <div class="section-title" style="margin-top: 35px;">البيانات التمريضية</div>
+            <div class="form-grid-layout">
+                <div class="form-group full-width">
+                    <label for="chief_complaint">الشكوى الرئيسية</label>
+                    <textarea name="chief_complaint" id="chief_complaint">{{ visit.chief_complaint|default_if_none:'' }}</textarea>
+                </div>
+
+                <div class="form-group full-width">
+                    <label for="nursing_notes">ملاحظات تمريضية</label>
+                    <textarea name="nursing_notes" id="nursing_notes">{{ visit.nursing_notes|default_if_none:'' }}</textarea>
+                </div>
             </div>
 
-            <div>
-                <label for="temperature">الحرارة</label>
-                <input type="text" name="temperature" id="temperature" value="{{ visit.temperature }}">
+            <div class="section-title" style="margin-top: 35px;">العلامات الحيوية</div>
+            <div class="form-grid-layout">
+                <div class="form-group">
+                    <label for="blood_pressure">ضغط الدم</label>
+                    <input type="text" name="blood_pressure" id="blood_pressure" value="{% if visit.blood_pressure != 'None' and visit.blood_pressure != None %}{{ visit.blood_pressure }}{% endif %}">
+                </div>
+
+                <div class="form-group">
+                    <label for="pulse">النبض</label>
+                    <input type="text" name="pulse" id="pulse" value="{% if visit.pulse != 'None' and visit.pulse != None %}{{ visit.pulse }}{% endif %}">
+                </div>
+
+                <div class="form-group">
+                    <label for="temperature">الحرارة</label>
+                    <input type="text" name="temperature" id="temperature" value="{% if visit.temperature != 'None' and visit.temperature != None %}{{ visit.temperature }}{% endif %}">
+                </div>
+
+                <div class="form-group">
+                    <label for="weight">الوزن</label>
+                    <input type="text" name="weight" id="weight" value="{% if visit.weight != 'None' and visit.weight != None %}{{ visit.weight }}{% endif %}">
+                </div>
+
+                <div class="form-group">
+                    <label for="height">الطول</label>
+                    <input type="text" name="height" id="height" value="{% if visit.height != 'None' and visit.height != None %}{{ visit.height }}{% endif %}">
+                </div>
+
+                <div class="form-group">
+                    <label for="blood_sugar">سكر الدم</label>
+                    <input type="text" name="blood_sugar" id="blood_sugar" value="{% if visit.blood_sugar != 'None' and visit.blood_sugar != None %}{{ visit.blood_sugar }}{% endif %}">
+                </div>
             </div>
 
-            <div>
-                <label for="weight">الوزن</label>
-                <input type="text" name="weight" id="weight" value="{{ visit.weight }}">
+            <div class="form-actions">
+                <button type="submit" class="btn-submit">حفظ التعديلات</button>
+                <a href="{% url 'patient_detail' visit.patient.id %}" class="btn-cancel">إلغاء</a>
             </div>
-
-            <div>
-                <label for="height">الطول</label>
-                <input type="text" name="height" id="height" value="{{ visit.height }}">
-            </div>
-
-            <div>
-                <label for="blood_sugar">سكر الدم</label>
-                <input type="text" name="blood_sugar" id="blood_sugar" value="{{ visit.blood_sugar }}">
-            </div>
-        </div>
+        </form>
     </div>
+</div>
 
-    <button type="submit" class="btn">حفظ التعديلات</button>
-</form>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('textarea').forEach(function (textarea) {
+            // Set initial height to fit existing content on page load
+            if (textarea.scrollHeight > 0) {
+                textarea.style.height = 'auto';
+                textarea.style.height = textarea.scrollHeight + 'px';
+            }
 
-<a href="{% url 'patient_detail' visit.patient.id %}" class="btn btn-secondary">إلغاء</a>
+            // Expand as user types
+            textarea.addEventListener('input', function () {
+                this.style.height = 'auto';
+                this.style.height = this.scrollHeight + 'px';
+            });
+        });
+    });
+</script>
+
 {% endblock %}

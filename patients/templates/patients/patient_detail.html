@@ -169,7 +169,917 @@
                 {% endif %}
                 {% if visit.lab_requests %}
                     <p><strong>طلبات التحاليل:</strong> {{ visit.lab_requests }}</p>
+                {% endif %}{% extends 'patients/base.html' %}
+
+{% block title %}تفاصيل المريض{% endblock %}
+
+{% block content %}
+<style>
+/* Mimicking Print Report Aesthetics for Screen */
+.patient-view-wrapper {
+    font-family: inherit;
+    color: #1a1a2e;
+}
+
+.section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a6b3c;
+    border-right: 5px solid #1a6b3c;
+    padding-right: 12px;
+    margin-bottom: 16px;
+    margin-top: 35px;
+}
+.section-title:first-child { margin-top: 0; }
+
+.ui-patient-card {
+    background: linear-gradient(135deg, #f5faf6, #eaf4ec);
+    border: 1px solid #c5deca;
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 15px rgba(26,107,60,0.05);
+}
+.ui-patient-card h2 {
+    font-size: 20px; color: #1a3d28;
+    margin-top: 0; margin-bottom: 20px; padding-bottom: 15px;
+    border-bottom: 2px dashed #b0d8b8;
+    display: flex; justify-content: space-between; align-items: center;
+}
+
+.patient-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.patient-field {
+    background: white;
+    border: 1px solid #d4e8d8;
+    border-radius: 8px;
+    padding: 12px 16px;
+}
+.patient-field.wide { grid-column: 1 / -1; }
+.patient-field .lbl {
+    font-size: 11px; color: #5a8a6a; font-weight: 700;
+    text-transform: uppercase; margin-bottom: 5px;
+}
+.patient-field .val { font-size: 15px; font-weight: 600; color: #1a1a2e; }
+
+/* Visit Card */
+.ui-visit-card {
+    background: white;
+    border: 1px solid #d0e4d5;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 15px rgba(26,107,60,0.06);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.ui-visit-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(26,107,60,0.12);
+}
+
+.ui-visit-header {
+    background: linear-gradient(135deg, #1a6b3c, #2e8b57);
+    color: white;
+    padding: 15px 24px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.ui-visit-header.pending {
+    background: linear-gradient(135deg, #e65100, #ff9800);
+}
+.ui-visit-badge {
+    background: rgba(255,255,255,0.25);
+    border: 1px solid rgba(255,255,255,0.45);
+    font-size: 12px; font-weight: 700;
+    padding: 5px 14px; border-radius: 20px;
+}
+.ui-visit-type { font-size: 16px; font-weight: 600; flex: 1; }
+.ui-visit-date { font-size: 13px; opacity: 0.85; }
+
+.ui-visit-body { padding: 0; }
+
+.ui-subsection {
+    padding: 20px 24px;
+    border-bottom: 1px solid #eef4ef;
+}
+.ui-subsection:last-child { border-bottom: none; }
+
+.ui-sub-title {
+    font-size: 14px; font-weight: 700;
+    padding: 6px 14px; border-radius: 6px;
+    display: inline-flex; align-items: center; gap: 8px; margin-bottom: 15px;
+}
+.nursing-title {
+    background: #e3f2e8; color: #1a5c32; border-right: 3px solid #1a6b3c;
+}
+.medical-title {
+    background: #e8f0fb; color: #1a3a6b; border-right: 3px solid #2a5bc4;
+}
+
+.vitals-grid {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;
+}
+.vital-box {
+    background: #f5faf6; border: 1px solid #c5deca;
+    border-radius: 8px; padding: 10px 16px;
+    text-align: center; min-width: 90px; flex: 1; /* allow flex grow to fill space */
+}
+.vital-label { font-size: 11px; color: #5a8a6a; font-weight: 600; margin-bottom: 4px; }
+.vital-value { font-size: 16px; font-weight: 700; color: #1a3d28; }
+
+.field-row {
+    display: flex; gap: 12px; padding: 8px 0;
+    border-bottom: 1px dashed #e8ede9; align-items: flex-start;
+}
+.field-row:last-child { border-bottom: none; }
+.field-label {
+    font-weight: 700; color: #2d5a3d; min-width: 170px;
+    flex-shrink: 0; font-size: 14px; padding-top: 2px;
+}
+.field-value { color: #1a1a2e; flex: 1; white-space: pre-wrap; font-size: 15px; line-height: 1.6; }
+
+.field-row.highlight {
+    background: #fffbea; border-radius: 8px;
+    padding: 10px 15px; border-bottom: none; margin: 8px 0;
+}
+.field-row.highlight .field-label { color: #7a5500; }
+
+.field-row.followup {
+    background: #eaf4fb; border-radius: 8px;
+    padding: 10px 15px; border-bottom: none; margin: 8px 0;
+}
+.field-row.followup .field-label { color: #1a3a6b; }
+
+.ui-actions-bar {
+    background: #f8fbf9;
+    padding: 15px 24px;
+    display: flex; gap: 10px;
+    border-top: 1px solid #eef4ef;
+}
+.empty-msg { color: #888; font-style: italic; font-size: 14px; }
+
+/* Action Buttons within cards */
+.btn-action {
+    padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    transition: all 0.2s; border: none; cursor: pointer;
+}
+.btn-edit { background: #e8f0fb; color: #1a3a6b; }
+.btn-edit:hover { background: #d0e0f5; }
+.btn-delete { background: #fbe8e8; color: #6b1a1a; }
+.btn-delete:hover { background: #f5d0d0; }
+.btn-complete { background: #e8f5e9; color: #1b5e20; }
+.btn-complete:hover { background: #c8e6c9; }
+.btn-add { background: #1a6b3c; color: white; }
+.btn-add:hover { background: #145c32; }
+
+/* Empty state cards */
+.ui-empty-card {
+    background: white; border: 1px dashed #c5deca;
+    border-radius: 10px; padding: 30px; text-align: center;
+    color: #5a8a6a; margin-bottom: 25px;
+}
+</style>
+
+<div class="patient-view-wrapper">
+
+<!-- Top Action Bar -->
+{% if is_doctor %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+    <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تقرير المريض/ة : {{ patient.name }}</h1>
+    <button onclick="printReport()" class="btn" style="background: #1a6b3c; color: white; padding: 10px 24px; font-size: 15px; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(26,107,60,0.2);">
+        🖨️ طباعة التقرير
+    </button>
+</div>
+{% endif %}
+<div class="section-title">👤 بيانات المريض</div>
+<div class="ui-patient-card">
+    <h2>
+        <span>{{ patient.name }}</span>
+        <div style="display: flex; gap: 10px;">
+            <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">➕ إضافة زيارة تمريضية جديدة</a>
+            <a href="{% url 'edit_patient' patient.id %}" class="btn-action btn-edit">✏️ تعديل</a>
+            {% if is_doctor %}
+                <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_patient' patient.id %}', 'حذف المريض', '{{ patient.name|escapejs }}')">🗑️ حذف</button>
+            {% endif %}
+        </div>
+    </h2>
+    <div class="patient-grid">
+        {% if patient.age %}
+        <div class="patient-field">
+            <div class="lbl">العمر</div>
+            <div class="val">{{ patient.age }}</div>
+        </div>
+        {% endif %}
+        {% if patient.phone %}
+        <div class="patient-field">
+            <div class="lbl">الهاتف</div>
+            <div class="val">{{ patient.phone }}</div>
+        </div>
+        {% endif %}
+        {% if patient.file_number %}
+        <div class="patient-field">
+            <div class="lbl">رقم الملف</div>
+            <div class="val">{{ patient.file_number }}</div>
+        </div>
+        {% endif %}
+        {% if patient.address %}
+        <div class="patient-field wide">
+            <div class="lbl">العنوان</div>
+            <div class="val">{{ patient.address }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if is_nurse %}
+    {% if pending_visit %}
+    <div class="section-title" style="color:#e65100; border-color:#e65100;">زيارة تم إرسالها من الإستقبال</div>
+    <div class="ui-visit-card">
+        <div class="ui-visit-header pending">
+            <span class="ui-visit-badge">بانتظار الطبيب</span>
+            <span class="ui-visit-type">{{ pending_visit.get_visit_type_display }}</span>
+            <span class="ui-visit-date">{{ pending_visit.created_at }}</span>
+        </div>
+        <div class="ui-visit-body">
+            <div class="ui-subsection">
+                <div class="ui-sub-title nursing-title">🩺 القسم التمريضي</div>
+                {% if pending_visit.chief_complaint %}
+                <div class="field-row">
+                    <span class="field-label">الشكوى الرئيسية:</span>
+                    <span class="field-value">{{ pending_visit.chief_complaint }}</span>
+                </div>
                 {% endif %}
+                {% if pending_visit.blood_pressure or pending_visit.pulse or pending_visit.temperature or pending_visit.weight or pending_visit.height or pending_visit.blood_sugar %}
+            <div class="vitals-grid">
+                {% if pending_visit.blood_pressure %}<div class="vital-box"><div class="vital-label">ضغط الدم</div><div class="vital-value">{{ pending_visit.blood_pressure }}</div></div>{% endif %}
+                {% if pending_visit.pulse %}<div class="vital-box"><div class="vital-label">النبض</div><div class="vital-value">{{ pending_visit.pulse }}</div></div>{% endif %}
+                {% if pending_visit.temperature %}<div class="vital-box"><div class="vital-label">الحرارة</div><div class="vital-value">{{ pending_visit.temperature }}</div></div>{% endif %}
+                {% if pending_visit.weight %}<div class="vital-box"><div class="vital-label">الوزن</div><div class="vital-value">{{ pending_visit.weight }}</div></div>{% endif %}
+                {% if pending_visit.height %}<div class="vital-box"><div class="vital-label">الطول</div><div class="vital-value">{{ pending_visit.height }}</div></div>{% endif %}
+                {% if pending_visit.blood_sugar %}<div class="vital-box"><div class="vital-label">سكر الدم</div><div class="vital-value">{{ pending_visit.blood_sugar }}</div></div>{% endif %}
+            </div>
+            {% endif %}
+            </div>
+            <div class="ui-actions-bar">
+                <a href="{% url 'nurse_edit_visit' pending_visit.id %}" class="btn-action btn-edit">✏️ تعديل الزيارة</a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="ui-empty-card">
+        <h3 style="margin-bottom: 15px; color:#1a3d28;">إجراءات الممرضة</h3>
+        <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">➕ إضافة زيارة تمريضية جديدة</a>
+    </div>
+    {% endif %}
+{% endif %}
+
+{% if is_doctor and pending_visit %}
+<div class="section-title" style="color:#e65100; border-color:#e65100;"> زيارة معلقة بانتظار الإكمال</div>
+<div class="ui-visit-card">
+    <div class="ui-visit-header pending">
+        <span class="ui-visit-badge">بانتظار الإكمال</span>
+        <span class="ui-visit-type">{{ pending_visit.get_visit_type_display }}</span>
+        <span class="ui-visit-date">{{ pending_visit.created_at }}</span>
+    </div>
+    <div class="ui-visit-body">
+        <div class="ui-subsection">
+            <div class="ui-sub-title nursing-title">🩺 القسم التمريضي المبدئي</div>
+            {% if pending_visit.chief_complaint %}
+                <div class="field-row"><span class="field-label">الشكوى الرئيسية:</span><span class="field-value">{{ pending_visit.chief_complaint }}</span></div>
+            {% endif %}
+            {% if pending_visit.nursing_notes %}
+                <div class="field-row"><span class="field-label">ملاحظات تمريضية:</span><span class="field-value">{{ pending_visit.nursing_notes }}</span></div>
+            {% endif %}
+            
+            {% if pending_visit.blood_pressure or pending_visit.pulse or pending_visit.temperature or pending_visit.weight or pending_visit.height or pending_visit.blood_sugar %}
+            <div class="vitals-grid">
+                {% if pending_visit.blood_pressure %}<div class="vital-box"><div class="vital-label">ضغط الدم</div><div class="vital-value">{{ pending_visit.blood_pressure }}</div></div>{% endif %}
+                {% if pending_visit.pulse %}<div class="vital-box"><div class="vital-label">النبض</div><div class="vital-value">{{ pending_visit.pulse }}</div></div>{% endif %}
+                {% if pending_visit.temperature %}<div class="vital-box"><div class="vital-label">الحرارة</div><div class="vital-value">{{ pending_visit.temperature }}</div></div>{% endif %}
+                {% if pending_visit.weight %}<div class="vital-box"><div class="vital-label">الوزن</div><div class="vital-value">{{ pending_visit.weight }}</div></div>{% endif %}
+                {% if pending_visit.height %}<div class="vital-box"><div class="vital-label">الطول</div><div class="vital-value">{{ pending_visit.height }}</div></div>{% endif %}
+                {% if pending_visit.blood_sugar %}<div class="vital-box"><div class="vital-label">سكر الدم</div><div class="vital-value">{{ pending_visit.blood_sugar }}</div></div>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+        <div class="ui-actions-bar">
+            <a href="{% url 'doctor_complete_visit' pending_visit.id %}" class="btn-action btn-complete">إكمال الزيارة الطبية</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if is_doctor %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 40px; margin-bottom: 20px;">
+    <div class="section-title" style="margin: 0;">الزيارات المكتملة</div>
+    <form method="get" style="display: flex; gap: 10px; align-items: center; margin: 0; background: white; padding: 6px 12px; border-radius: 8px; border: 1px solid #d0e4d5;">
+        <label for="sort" style="margin: 0; font-size: 13px; font-weight: 700; color: #5a8a6a;">ترتيب:</label>
+        <select name="sort" id="sort" onchange="this.form.submit()" style="padding: 4px 8px; border-radius: 5px; border: 1px solid #ccc; font-family: inherit; font-size: 13px; outline: none;">
+            {% if sort_order == 'newest' %}<option value="newest" selected>الأحدث أولاً</option>{% else %}<option value="newest">الأحدث أولاً</option>{% endif %}
+            {% if sort_order == 'oldest' %}<option value="oldest" selected>الأقدم أولاً</option>{% else %}<option value="oldest">الأقدم أولاً</option>{% endif %}
+        </select>
+    </form>
+</div>
+
+{% if visits %}
+    {% for visit in visits %}
+    <div class="ui-visit-card">
+        <div class="ui-visit-header">
+            <span class="ui-visit-badge">زيارة {{ forloop.counter }}</span>
+            <span class="ui-visit-type">{{ visit.get_visit_type_display }}</span>
+            <span class="ui-visit-date">{{ visit.created_at }}</span>
+        </div>
+        <div class="ui-visit-body">
+            <div class="ui-subsection">
+                <div class="ui-sub-title nursing-title">🩺 القسم التمريضي</div>
+                {% if visit.chief_complaint %}<div class="field-row"><span class="field-label">الشكوى الرئيسية:</span><span class="field-value">{{ visit.chief_complaint }}</span></div>{% endif %}
+                {% if visit.nursing_notes %}<div class="field-row"><span class="field-label">ملاحظات تمريضية:</span><span class="field-value">{{ visit.nursing_notes }}</span></div>{% endif %}
+                
+                {% if visit.blood_pressure or visit.pulse or visit.temperature or visit.weight or visit.height or visit.blood_sugar %}
+                <div class="vitals-grid">
+                    {% if visit.blood_pressure %}<div class="vital-box"><div class="vital-label">ضغط الدم</div><div class="vital-value">{{ visit.blood_pressure }}</div></div>{% endif %}
+                    {% if visit.pulse %}<div class="vital-box"><div class="vital-label">النبض</div><div class="vital-value">{{ visit.pulse }}</div></div>{% endif %}
+                    {% if visit.temperature %}<div class="vital-box"><div class="vital-label">الحرارة</div><div class="vital-value">{{ visit.temperature }}</div></div>{% endif %}
+                    {% if visit.weight %}<div class="vital-box"><div class="vital-label">الوزن</div><div class="vital-value">{{ visit.weight }}</div></div>{% endif %}
+                    {% if visit.height %}<div class="vital-box"><div class="vital-label">الطول</div><div class="vital-value">{{ visit.height }}</div></div>{% endif %}
+                    {% if visit.blood_sugar %}<div class="vital-box"><div class="vital-label">سكر الدم</div><div class="vital-value">{{ visit.blood_sugar }}</div></div>{% endif %}
+                </div>
+                {% endif %}
+            </div>
+            <div class="ui-subsection">
+                <div class="ui-sub-title medical-title">⚕️ القسم الطبي</div>
+                {% if visit.history_of_present_illness %}<div class="field-row"><span class="field-label">القصة المرضية الحالية:</span><span class="field-value">{{ visit.history_of_present_illness }}</span></div>{% endif %}
+                {% if visit.clinical_examination %}<div class="field-row"><span class="field-label">الفحص السريري:</span><span class="field-value">{{ visit.clinical_examination }}</span></div>{% endif %}
+                {% if visit.diagnosis %}<div class="field-row highlight"><span class="field-label">التشخيص:</span><span class="field-value">{{ visit.diagnosis }}</span></div>{% endif %}
+                {% if visit.treatment_plan %}<div class="field-row"><span class="field-label">الخطة العلاجية:</span><span class="field-value">{{ visit.treatment_plan }}</span></div>{% endif %}
+                {% if visit.prescription %}<div class="field-row"><span class="field-label">الوصفة الطبية:</span><span class="field-value">{{ visit.prescription }}</span></div>{% endif %}
+                {% if visit.lab_requests %}<div class="field-row"><span class="field-label">طلبات التحاليل:</span><span class="field-value">{{ visit.lab_requests }}</span></div>{% endif %}
+                {% if visit.imaging_requests %}<div class="field-row"><span class="field-label">طلبات الصور:</span><span class="field-value">{{ visit.imaging_requests }}</span></div>{% endif %}
+                {% if visit.patient_instructions %}<div class="field-row"><span class="field-label">تعليمات للمريض:</span><span class="field-value">{{ visit.patient_instructions }}</span></div>{% endif %}
+                {% if visit.follow_up_date %}<div class="field-row followup"><span class="field-label">موعد المراجعة القادم:</span><span class="field-value">{{ visit.follow_up_date }}</span></div>{% endif %}
+                {% if visit.doctor_notes %}<div class="field-row"><span class="field-label">ملاحظات الطبيب:</span><span class="field-value">{{ visit.doctor_notes }}</span></div>{% endif %}
+            </div>
+            <div class="ui-actions-bar">
+                <a href="{% url 'edit_visit' visit.id %}" class="btn-action btn-edit">✏️ تعديل الزيارة</a>
+                <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_visit' visit.id %}', 'حذف الزيارة', '{{ visit.get_visit_type_display|escapejs }}')">🗑️ حذف الزيارة</button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="ui-empty-card">لا توجد زيارات مكتملة لهذا المريض.</div>
+{% endif %}
+{% endif %}
+
+<div style="margin-top: 30px; margin-bottom: 20px;">
+    <a href="{% url 'patient_list' %}" class="btn-action btn-edit" style="font-size: 15px; padding: 10px 20px;">رجوع لقائمة المرضى</a>
+</div>
+
+</div> <!-- end patient-view-wrapper -->
+
+<!-- ═══════════════════════════════════════════
+     HIDDEN DATA STORE — read by printReport()
+     ═══════════════════════════════════════════ -->
+<div id="print-report" style="display:none;">
+
+    <div id="rpt-patient"
+         data-name="{{ patient.name }}"
+         data-file="{{ patient.file_number }}"
+         data-age="{{ patient.age }}"
+         data-phone="{{ patient.phone }}"
+         data-address="{{ patient.address }}"
+         data-clinic="عيادة: {{ clinic_name }}"
+         data-doctor="{{ request.user.first_name }} {{ request.user.last_name }}">
+    </div>
+
+    {% for visit in visits %}
+    <div class="rpt-visit"
+         data-number="{{ forloop.counter }}"
+         data-type="{{ visit.get_visit_type_display }}"
+         data-date="{{ visit.created_at }}"
+         data-chief-complaint="{{ visit.chief_complaint }}"
+         data-nursing-notes="{{ visit.nursing_notes }}"
+         data-blood-pressure="{{ visit.blood_pressure }}"
+         data-pulse="{{ visit.pulse }}"
+         data-temperature="{{ visit.temperature }}"
+         data-weight="{{ visit.weight }}"
+         data-height="{{ visit.height }}"
+         data-blood-sugar="{{ visit.blood_sugar }}"
+         data-history="{{ visit.history_of_present_illness }}"
+         data-examination="{{ visit.clinical_examination }}"
+         data-diagnosis="{{ visit.diagnosis }}"
+         data-treatment="{{ visit.treatment_plan }}"
+         data-prescription="{{ visit.prescription }}"
+         data-lab="{{ visit.lab_requests }}"
+         data-imaging="{{ visit.imaging_requests }}"
+         data-instructions="{{ visit.patient_instructions }}"
+         data-followup="{{ visit.follow_up_date }}"
+         data-doctor-notes="{{ visit.doctor_notes }}">
+    </div>
+    {% endfor %}
+
+</div>
+
+
+<script>
+function printReport() {
+
+    /* ── Patient data ── */
+    const p = document.getElementById('rpt-patient').dataset;
+
+    /* ── Visits ── */
+    const visitEls = document.querySelectorAll('.rpt-visit');
+    let visitsHTML = '';
+
+    visitEls.forEach(el => {
+        const d = el.dataset;
+
+        const vitals = [
+            { label: 'ضغط الدم',  value: d.bloodPressure },
+            { label: 'النبض',      value: d.pulse },
+            { label: 'الحرارة',   value: d.temperature },
+            { label: 'الوزن',     value: d.weight },
+            { label: 'الطول',     value: d.height },
+            { label: 'سكر الدم',  value: d.bloodSugar },
+        ].filter(v => v.value);
+
+        const vitalsHTML = vitals.length ? `
+            <div class="vitals-grid">
+                ${vitals.map(v => `
+                    <div class="vital-box">
+                        <div class="vital-label">${v.label}</div>
+                        <div class="vital-value">${v.value}</div>
+                    </div>`).join('')}
+            </div>` : '';
+
+        const nursingFields = [
+            { label: 'الشكوى الرئيسية', value: d.chiefComplaint },
+            { label: 'ملاحظات تمريضية', value: d.nursingNotes },
+        ].filter(f => f.value);
+
+        const nursingHTML = nursingFields.map(f => `
+            <div class="field-row">
+                <span class="field-label">${f.label}:</span>
+                <span class="field-value">${f.value}</span>
+            </div>`).join('');
+
+        const medFields = [
+            { label: 'القصة المرضية الحالية', value: d.history,      cls: '' },
+            { label: 'الفحص السريري',          value: d.examination,  cls: '' },
+            { label: 'التشخيص',                value: d.diagnosis,    cls: 'highlight' },
+            { label: 'الخطة العلاجية',          value: d.treatment,    cls: '' },
+            { label: 'الوصفة الطبية',           value: d.prescription, cls: '' },
+            { label: 'طلبات التحاليل',          value: d.lab,          cls: '' },
+            { label: 'طلبات الصور',             value: d.imaging,      cls: '' },
+            { label: 'تعليمات للمريض',          value: d.instructions, cls: '' },
+            { label: 'موعد المراجعة القادم',    value: d.followup,     cls: 'followup' },
+            { label: 'ملاحظات الطبيب',          value: d.doctorNotes,  cls: '' },
+        ].filter(f => f.value);
+
+        const medHTML = medFields.map(f => `
+            <div class="field-row ${f.cls}">
+                <span class="field-label">${f.label}:</span>
+                <span class="field-value">${f.value}</span>
+            </div>`).join('');
+
+        visitsHTML += `
+        <div class="visit-card">
+            <div class="visit-header">
+                <span class="visit-badge">زيارة ${d.number}</span>
+                <span class="visit-type">${d.type}</span>
+                <span class="visit-date">${d.date}</span>
+            </div>
+            <div class="visit-body">
+                <div class="subsection">
+                    <div class="sub-title nursing-title">🩺 القسم التمريضي</div>
+                    ${nursingHTML || '<p class="empty">لا توجد بيانات تمريضية</p>'}
+                    ${vitalsHTML}
+                </div>
+                <div class="subsection">
+                    <div class="sub-title medical-title">⚕️ القسم الطبي</div>
+                    ${medHTML || '<p class="empty">لا توجد بيانات طبية</p>'}
+                </div>
+            </div>
+        </div>`;
+    });
+
+    const today = new Date().toLocaleDateString('ar-SA', {
+        year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>تقرير طبي — ${p.name}</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    direction: rtl;
+    background: #f0f4f1;
+    color: #1a1a2e;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.page {
+    max-width: 900px;
+    margin: 0 auto;
+    background: white;
+    min-height: 100vh;
+    box-shadow: 0 0 40px rgba(0,0,0,0.12);
+}
+
+/* Header */
+.report-header {
+    background: linear-gradient(135deg, #1a6b3c 0%, #0d3d22 100%);
+    color: white;
+    padding: 28px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.header-left { display:flex; align-items:center; gap:16px; }
+
+.logo-circle {
+    width: 62px; height: 62px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; flex-shrink: 0;
+}
+
+.clinic-name { font-size: 21px; font-weight: 800; }
+.doctor-name  { font-size: 13px; opacity: 0.8; margin-top: 4px; }
+.header-right { text-align: left; }
+.report-title { font-size: 27px; font-weight: 800; letter-spacing: 1px; }
+.report-date  { font-size: 11px; opacity: 0.7; margin-top: 4px; }
+
+/* Gold bar */
+.accent-bar {
+    height: 6px;
+    background: linear-gradient(90deg, #f0a500, #ffe082, #1a6b3c);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+/* Content */
+.content { padding: 28px 40px; }
+
+.section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a6b3c;
+    border-right: 5px solid #1a6b3c;
+    padding-right: 12px;
+    margin-bottom: 14px;
+    margin-top: 26px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+.section-title:first-child { margin-top: 0; }
+
+/* Patient card */
+.patient-card {
+    background: linear-gradient(135deg, #f5faf6, #eaf4ec);
+    border: 1px solid #c5deca;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 26px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.patient-card h2 {
+    font-size: 20px; color: #1a3d28;
+    margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 2px dashed #b0d8b8;
+}
+
+.patient-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.patient-field {
+    background: white;
+    border: 1px solid #d4e8d8;
+    border-radius: 7px;
+    padding: 10px 14px;
+}
+.patient-field.wide { grid-column: span 3; }
+.patient-field .lbl {
+    font-size: 10px; color: #5a8a6a; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px;
+}
+.patient-field .val { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+
+/* Visit card */
+.visit-card {
+    border: 1px solid #d0e4d5;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    page-break-inside: avoid;
+    box-shadow: 0 2px 10px rgba(26,107,60,0.08);
+}
+
+.visit-header {
+    background: linear-gradient(135deg, #1a6b3c, #2e8b57);
+    color: white;
+    padding: 11px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.visit-badge {
+    background: rgba(255,255,255,0.22);
+    border: 1px solid rgba(255,255,255,0.45);
+    font-size: 11px; font-weight: 700;
+    padding: 3px 12px; border-radius: 20px;
+}
+
+.visit-type { font-size: 14px; font-weight: 600; flex: 1; }
+.visit-date { font-size: 11px; opacity: 0.72; }
+
+.visit-body { background: white; }
+
+.subsection {
+    padding: 14px 20px;
+    border-bottom: 1px solid #eef4ef;
+}
+.subsection:last-child { border-bottom: none; }
+
+.sub-title {
+    font-size: 12px; font-weight: 700;
+    padding: 4px 12px; border-radius: 5px;
+    display: inline-block; margin-bottom: 10px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.nursing-title {
+    background: #e3f2e8; color: #1a5c32;
+    border-right: 3px solid #1a6b3c;
+}
+
+.medical-title {
+    background: #e8f0fb; color: #1a3a6b;
+    border-right: 3px solid #2a5bc4;
+}
+
+/* Vitals */
+.vitals-grid {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;
+}
+
+.vital-box {
+    background: #f5faf6;
+    border: 1px solid #c5deca;
+    border-radius: 8px;
+    padding: 8px 14px;
+    text-align: center;
+    min-width: 88px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.vital-label { font-size: 10px; color: #5a8a6a; font-weight: 600; margin-bottom: 3px; }
+.vital-value { font-size: 15px; font-weight: 700; color: #1a3d28; }
+
+/* Field rows */
+.field-row {
+    display: flex; gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px dashed #e8ede9;
+    align-items: flex-start;
+}
+.field-row:last-child { border-bottom: none; }
+
+.field-label {
+    font-weight: 700; color: #2d5a3d;
+    min-width: 155px; flex-shrink: 0; font-size: 12px;
+}
+
+.field-value { color: #1a1a2e; flex: 1; white-space: pre-wrap; font-size: 13px; }
+
+.field-row.highlight {
+    background: #fffbea; border-radius: 6px;
+    padding: 7px 12px; border-bottom: none; margin: 4px 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.field-row.highlight .field-label { color: #7a5500; }
+
+.field-row.followup {
+    background: #eaf4fb; border-radius: 6px;
+    padding: 7px 12px; border-bottom: none; margin: 4px 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.field-row.followup .field-label { color: #1a3a6b; }
+
+.empty { color: #bbb; font-style: italic; font-size: 12px; }
+
+/* Footer */
+.report-footer {
+    margin-top: 36px;
+    padding: 18px 40px;
+    background: #f5faf6;
+    border-top: 3px solid #1a6b3c;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.footer-clinic { font-size: 13px; font-weight: 700; color: #1a6b3c; }
+.footer-doctor { font-size: 11px; color: #5a8a6a; margin-top: 2px; }
+
+.footer-sig { text-align: center; }
+.sig-line { width: 130px; border-bottom: 1px solid #aaa; margin: 0 auto 5px; }
+.sig-label { font-size: 11px; color: #888; }
+
+.footer-note { font-size: 11px; color: #aaa; }
+
+@media print {
+    body { background: white; }
+    .page { max-width: 100%; box-shadow: none; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+    <div class="report-header">
+        <div class="header-left">
+            <div class="logo-circle">🏥</div>
+            <div>
+                <div class="clinic-name">${p.clinic}</div>
+                <div class="doctor-name">د. ${p.doctor}</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="report-title">تقرير طبي</div>
+            <div class="report-date">تاريخ الطباعة: ${today}</div>
+        </div>
+    </div>
+
+    <div class="accent-bar"></div>
+
+    <div class="content">
+
+        <div class="section-title">👤 بيانات المريض</div>
+        <div class="patient-card">
+            <h2>${p.name}</h2>
+            <div class="patient-grid">
+                <div class="patient-field">
+                    <div class="lbl">رقم الملف</div>
+                    <div class="val">${p.file}</div>
+                </div>
+                ${p.age     ? `<div class="patient-field"><div class="lbl">العمر</div><div class="val">${p.age}</div></div>` : ''}
+                ${p.phone   ? `<div class="patient-field"><div class="lbl">الهاتف</div><div class="val">${p.phone}</div></div>` : ''}
+                ${p.address ? `<div class="patient-field wide"><div class="lbl">العنوان</div><div class="val">${p.address}</div></div>` : ''}
+            </div>
+        </div>
+
+        ${visitsHTML ? `<div class="section-title">📋 الزيارات المكتملة</div>${visitsHTML}` : ''}
+
+    </div>
+
+    <div class="report-footer">
+        <div>
+            <div class="footer-clinic">${p.clinic}</div>
+            <div class="footer-doctor">د. ${p.doctor}</div>
+        </div>
+        <div class="footer-sig">
+            <div class="sig-line"></div>
+            <div class="sig-label">توقيع الطبيب</div>
+        </div>
+        <div class="footer-note">تقرير طبي رسمي</div>
+    </div>
+
+</div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=960,height=800');
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 600);
+}
+</script>
+
+<!-- ═══════════════════════════════════════
+     DELETE CONFIRMATION MODAL
+     ═══════════════════════════════════════ -->
+<div id="delete-modal-overlay" onclick="closeDeleteModal(event)" style="
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+">
+    <div id="delete-modal-box" style="
+        background: white;
+        border-radius: 16px;
+        padding: 36px 40px;
+        max-width: 440px;
+        width: 90%;
+        text-align: center;
+        box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+        animation: popIn 0.22s ease;
+        position: relative;
+    ">
+        <!-- Icon -->
+        <div style="
+            width: 70px; height: 70px;
+            background: #fbe8e8;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 34px;
+            margin: 0 auto 20px;
+            border: 3px solid #f5d0d0;
+        ">🗑️</div>
+
+        <h2 id="delete-modal-title" style="margin: 0 0 10px; font-size: 20px; color: #3d1a1a; font-weight: 800;"></h2>
+        <p id="delete-modal-desc" style="margin: 0 0 28px; color: #6b3a3a; font-size: 14px; line-height: 1.6;"></p>
+
+        <form id="delete-modal-form" method="post" style="margin: 0;">
+            {% csrf_token %}
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button type="submit" style="
+                    background: linear-gradient(135deg, #c0392b, #e74c3c);
+                    color: white; border: none; border-radius: 8px;
+                    padding: 11px 28px; font-size: 15px; font-weight: 700;
+                    cursor: pointer; transition: opacity 0.2s;
+                    font-family: inherit;
+                " onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">نعم، احذف</button>
+                <button type="button" onclick="closeDeleteModalDirect()" style="
+                    background: #f0f4f1; color: #3d5a45;
+                    border: 1px solid #c5deca; border-radius: 8px;
+                    padding: 11px 28px; font-size: 15px; font-weight: 700;
+                    cursor: pointer; transition: background 0.2s;
+                    font-family: inherit;
+                " onmouseover="this.style.background='#e0ebe3'" onmouseout="this.style.background='#f0f4f1'">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+@keyframes popIn {
+    from { transform: scale(0.85); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+}
+</style>
+
+<script>
+function openDeleteModal(actionUrl, title, description) {
+    document.getElementById('delete-modal-title').textContent = title;
+    document.getElementById('delete-modal-desc').textContent = 'هل أنت متأكد من حذف: ' + description + '؟ لا يمكن التراجع عن هذا الإجراء.';
+    document.getElementById('delete-modal-form').action = actionUrl;
+    const overlay = document.getElementById('delete-modal-overlay');
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeDeleteModal(event) {
+    if (event.target === document.getElementById('delete-modal-overlay')) {
+        closeDeleteModalDirect();
+    }
+}
+
+function closeDeleteModalDirect() {
+    document.getElementById('delete-modal-overlay').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+// Close on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeDeleteModalDirect();
+});
+</script>
+
+{% endblock %}
                 {% if visit.imaging_requests %}
                     <p><strong>طلبات الصور:</strong> {{ visit.imaging_requests }}</p>
                 {% endif %}

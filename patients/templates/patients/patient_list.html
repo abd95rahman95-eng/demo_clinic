@@ -4,115 +4,78 @@
 
 {% block content %}
 
-<style>
-    .patient-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 18px;
-    }
-
-    .patient-card {
-        position: relative;
-        padding: 18px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: 0.2s;
-        cursor: pointer;
-        min-height: 220px;
-    }
-
-    .patient-card:hover {
-        box-shadow: 0 6px 16px rgba(0,0,0,0.15);
-        transform: translateY(-3px);
-    }
 
 
-    .patient-card h2,
-    .patient-card p {
-        margin-top: 0;
-    }
-
-    .patient-card h2 {
-        font-size: 24px;
-        margin-bottom: 10px;
-        color: #1f2d3d;
-    }
-
-    .patient-meta {
-        margin-bottom: 6px;
-    }
-
-
-    /* ألوان حسب الحالة */
-    .patient-completed {
-        background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
-    }
-
-    .patient-pending {
-        background: linear-gradient(135deg, #fff8e1, #ffe082);
-    }
-
-    .patient-none {
-        background: linear-gradient(135deg, #f5f5f5, #e0e0e0);
-    }
-
-    @media (max-width: 900px) {
-        .patient-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
-
-<h1>قائمة المرضى</h1>
-
-
-<form method="get" style="margin-bottom: 20px;">
-    <input type="text" name="q" placeholder="ابحث بالاسم أو الهاتف أو رقم الملف" value="{{ query|default:'' }}">
-    <button type="submit" class="btn">بحث</button>
-</form>
-
-<div style="margin-bottom: 20px;">
-    <a href="?q={{ query }}&filter=" class="btn">الكل</a>
-    <a href="?q={{ query }}&filter=pending" class="btn">زيارات معلقة</a>
-    <a href="?q={{ query }}&filter=completed" class="btn">زيارات مكتملة</a>
-    <a href="?q={{ query }}&filter=none" class="btn">بدون زيارات</a>
+<div class="patient-list-header">
+    <h1 class="patient-list-title">قائمة المرضى</h1>
+    {% if request.user.groups.all.0.name == "Nurse" %}
+    <a href="{% url 'add_patient' %}" class="btn-submit">➕ إضافة مريض جديد</a>
+    {% endif %}
 </div>
 
-<div class="patient-grid">
-    {% for item in patients_with_status %}
-        <a href="{% url 'patient_detail' item.patient.id %}" class="patient-card {{ item.card_class }}" style="text-decoration: none; color: inherit; display: block;">
+<div class="controls-card">
+    <form method="get" class="search-row">
+        <input type="text" name="q" class="search-input" placeholder="ابحث بالاسم، الهاتف، أو رقم الملف..." value="{{ query|default:'' }}">
+        <button type="submit" class="btn-submit">البحث</button>
+    </form>
 
+    <div class="filters-row">
+        <span class="filter-label">تصفية حسب الحالة:</span>
+        <a href="?q={{ query }}&filter=" class="filter-chip {% if not filter_type %}active{% endif %}">الكل</a>
+        <a href="?q={{ query }}&filter=pending" class="filter-chip {% if filter_type == 'pending' %}active{% endif %}">زيارات معلقة</a>
+        <a href="?q={{ query }}&filter=completed" class="filter-chip {% if filter_type == 'completed' %}active{% endif %}">زيارات مكتملة</a>
+        <a href="?q={{ query }}&filter=none" class="filter-chip {% if filter_type == 'none' %}active{% endif %}">بدون زيارات</a>
+    </div>
+</div>
+
+<div class="patient-grid-list">
+    {% for item in patients_with_status %}
+        <a href="{% url 'patient_detail' item.patient.id %}" class="patient-card-modern {{ item.card_class }}">
             <h2>{{ item.patient.name }}</h2>
 
-            <p class="patient-meta"><strong>رقم الملف:</strong> {{ item.patient.file_number }}</p>
-            <p class="patient-meta"><strong>العمر:</strong> {{ item.patient.age }}</p>
-            <p class="patient-meta"><strong>الهاتف:</strong> {{ item.patient.phone }}</p>
-            <p class="patient-meta"><strong>العنوان:</strong> {{ item.patient.address }}</p>
+            <div class="patient-card-body">
+                <div class="patient-info-row">
+                    <strong>رقم الملف:</strong> <span>{{ item.patient.file_number|default:"—" }}</span>
+                </div>
+                <div class="patient-info-row">
+                    <strong>العمر:</strong> <span>{{ item.patient.age|default:"—" }}</span>
+                </div>
+                <div class="patient-info-row">
+                    <strong>الهاتف:</strong> <span>{{ item.patient.phone|default:"—" }}</span>
+                </div>
+                {% if item.patient.address %}
+                <div class="patient-info-row">
+                    <strong>العنوان:</strong> <span>{{ item.patient.address }}</span>
+                </div>
+                {% endif %}
+            </div>
 
-            <p class="patient-meta">
-                <strong>الحالة:</strong> {{ item.visit_status }}
-            </p>
-
-        </a>   
-
+            <div class="patient-status-badge">
+                {{ item.visit_status }}
+            </div>
+        </a>
     {% empty %}
-        <p>لا يوجد مرضى مطابقون للبحث.</p>
+        <div class="empty-state">
+            <div style="font-size: 40px; margin-bottom: 15px;">🔍</div>
+            <div style="font-weight: bold; color: #1e293b; margin-bottom: 8px;">لا يوجد مرضى مطابقون للبحث</div>
+            <div>جرب استخدام كلمات مفتاحية أخرى أو إلغاء علامات التصفية.</div>
+        </div>
     {% endfor %}
 </div>
 
-<div style="margin-top: 20px; text-align: center;">
+<div class="pagination-wrapper">
     {% if patients_with_status.has_previous %}
-        <a class="btn btn-secondary" href="?q={{ query }}&filter={{ filter_type }}&page=1">الأولى</a>
-        <a class="btn btn-secondary" href="?q={{ query }}&filter={{ filter_type }}&page={{ patients_with_status.previous_page_number }}">السابق</a>
+        <a class="btn-cancel" href="?q={{ query }}&filter={{ filter_type }}&page=1">الأولى</a>
+        <a class="btn-cancel" href="?q={{ query }}&filter={{ filter_type }}&page={{ patients_with_status.previous_page_number }}">السابق</a>
     {% endif %}
 
-    <span style="margin: 0 10px;">
+    <div class="page-info">
         صفحة {{ patients_with_status.number }} من {{ patients_with_status.paginator.num_pages }}
-    </span>
+    </div>
 
     {% if patients_with_status.has_next %}
-        <a class="btn btn-secondary" href="?q={{ query }}&filter={{ filter_type }}&page={{ patients_with_status.next_page_number }}">التالي</a>
-        <a class="btn btn-secondary" href="?q={{ query }}&filter={{ filter_type }}&page={{ patients_with_status.paginator.num_pages }}">الأخيرة</a>
+        <a class="btn-cancel" href="?q={{ query }}&filter={{ filter_type }}&page={{ patients_with_status.next_page_number }}">التالي</a>
+        <a class="btn-cancel" href="?q={{ query }}&filter={{ filter_type }}&page={{ patients_with_status.paginator.num_pages }}">الأخيرة</a>
     {% endif %}
 </div>
 

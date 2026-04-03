@@ -4,130 +4,19 @@
 
 {% block content %}
 
-<style>
-    .pending-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 18px;
-        margin-top: 20px;
-    }
 
-    .pending-card {
-        padding: 16px;
-        border-radius: 12px;
-        background: #ffffff;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: 0.2s;
-        border: 1px solid #e5e7eb;
-        min-height: 260px;
-    }
+<div class="pending-list-header">
+    <h1 class="pending-list-title">الزيارات المعلقة</h1>
+</div>
 
-    .pending-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 16px rgba(0,0,0,0.15);
-    }
-
-    .pending-card.first {
-        border: 2px solid #1f4e79;
-        background: linear-gradient(135deg, #eef6ff, #dcecff);
-    }
-
-    .queue-number {
-        font-size: 14px;
-        color: #666;
-        margin-bottom: 8px;
-        font-weight: bold;
-    }
-
-    .patient-name {
-        font-size: 24px;
-        font-weight: bold;
-        margin-bottom: 12px;
-        color: #1f2d3d;
-        line-height: 1.3;
-    }
-
-    .pending-meta {
-        font-size: 14px;
-        margin-bottom: 6px;
-        color: #333;
-    }
-
-    .pending-meta strong {
-        color: #1f2d3d;
-    }
-
-    .first-badge {
-        display: inline-block;
-        background: #1f4e79;
-        color: white;
-        border-radius: 999px;
-        padding: 4px 10px;
-        font-size: 12px;
-        font-weight: bold;
-        margin-bottom: 10px;
-    }
-
-    .actions {
-        margin-top: 14px;
-    }
-
-    .actions a {
-        margin-left: 10px;
-        text-decoration: none;
-        font-weight: bold;
-        font-size: 14px;
-    }
-
-    .message-box {
-        padding: 12px;
-        border-radius: 8px;
-        margin-bottom: 16px;
-        border: 1px solid;
-    }
-
-    .message-success {
-        background: #e8f5e9;
-        color: #1b5e20;
-        border-color: #c8e6c9;
-    }
-
-    .message-error {
-        background: #fff5f5;
-        color: #b02a37;
-        border-color: #f5c2c7;
-    }
-
-    .message-warning {
-        background: #fff8e1;
-        color: #8a6d1d;
-        border-color: #ffe082;
-    }
-
-    @media (max-width: 1200px) {
-        .pending-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-
-    @media (max-width: 700px) {
-        .pending-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
-
-<h1>الزيارات المعلقة</h1>
-
-<p class="muted">هذه الزيارات بانتظار الإكمال من الطبيب، مرتبة من الأقدم إلى الأحدث.</p>
+<p style="color: #64748b; font-size: 15px; margin-bottom: 25px;">هذه الزيارات بانتظار الإكمال من الطبيب، مرتبة من الأقدم إلى الأحدث.</p>
 
 {% if messages %}
     {% for message in messages %}
         <div class="message-box
             {% if message.tags == 'success' %}message-success{% endif %}
             {% if message.tags == 'error' %}message-error{% endif %}
-            {% if message.tags == 'warning' %}message-warning{% endif %}
-        ">
+            {% if message.tags == 'warning' %}message-warning{% endif %}">
             {{ message }}
         </div>
     {% endfor %}
@@ -136,55 +25,55 @@
 {% if visits %}
     <div class="pending-grid">
         {% for visit in visits %}
-            <div class="pending-card {% if forloop.first %}first{% endif %}">
+            <div class="pending-card-modern {% if forloop.first %}first-in-line{% endif %}">
 
-                <div class="queue-number">
-                    الحالة رقم {{ forloop.counter }}
+                <div class="queue-number-badge">
+                    {% if forloop.first %}الحالة التالية (رقم {{ forloop.counter }}){% else %}الحالة رقم: {{ forloop.counter }}{% endif %}
                 </div>
-
-                {% if forloop.first %}
-                    <div class="first-badge">الحالة التالية</div>
-                {% endif %}
 
                 <div class="patient-name">
                     {{ visit.patient.name }}
                 </div>
 
-                <p class="pending-meta">
-                    <strong>رقم الملف:</strong> {{ visit.patient.file_number }}
-                </p>
+                <div class="card-body">
+                    <div class="info-row">
+                        <strong>رقم الملف:</strong> <span>{{ visit.patient.file_number }}</span>
+                    </div>
 
-                <p class="pending-meta">
-                    <strong>نوع الزيارة:</strong> {{ visit.get_visit_type_display }}
-                </p>
+                    <div class="info-row">
+                        <strong>نوع الزيارة:</strong> <span>{{ visit.get_visit_type_display }}</span>
+                    </div>
 
-                <p class="pending-meta">
-                    <strong>الشكوى الرئيسية:</strong> {{ visit.chief_complaint|default:"—" }}
-                </p>
+                    <div class="info-row">
+                        <strong>الشكوى:</strong> <span style="display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ visit.chief_complaint|default:"—" }}</span>
+                    </div>
 
-                <p class="pending-meta">
-                    <strong>ملاحظات تمريضية:</strong> {{ visit.nursing_notes|default:"—" }}
-                </p>
+                    <div class="info-row">
+                        <strong>ملاحظات تمر.:</strong> <span style="display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ visit.nursing_notes|default:"—" }}</span>
+                    </div>
 
-                <p class="pending-meta">
-                    <strong>أنشئت بواسطة:</strong> {{ visit.created_by.username|default:"—" }}
-                </p>
+                    <div class="info-row">
+                        <strong>أنشئت بواسطة:</strong> <span>{{ visit.created_by.first_name|default:"—" }} {{ visit.created_by.last_name|default:"" }}</span>
+                    </div>
 
-                <p class="pending-meta">
-                    <strong>وقت الإدخال:</strong> {{ visit.created_at|time:"H:i" }}
-                </p>
+                    <div class="info-row" style="margin-top: auto; padding-top: 10px;">
+                        <strong>وقت الإدخال:</strong> <span style="color: #64748b; font-weight: 600;">{{ visit.created_at|time:"h:i A" }}</span>
+                    </div>
+                </div>
 
-                <div class="actions">
-                    <a href="{% url 'doctor_complete_visit' visit.id %}" class="btn">إكمال الزيارة</a>
-                    <a href="{% url 'patient_detail' visit.patient.id %}" class="btn btn-secondary">ملف المريض</a>
+                <div class="card-actions">
+                    <a href="{% url 'doctor_complete_visit' visit.id %}" class="btn-action-primary">إكمال الزيارة</a>
+                    <a href="{% url 'patient_detail' visit.patient.id %}" class="btn-action-outline">ملف المريض</a>
                 </div>
 
             </div>
         {% endfor %}
     </div>
 {% else %}
-    <div class="card">
-        <p>لا توجد زيارات معلقة حاليًا.</p>
+    <div class="empty-state">
+        <div style="font-size: 40px; margin-bottom: 15px;">☕</div>
+        <div style="font-weight: bold; color: #1e293b; margin-bottom: 8px;">لا توجد زيارات معلقة حالياً</div>
+        <div>يمكنك أخذ قسط من الراحة، لقد أكملت جميع مرضاك!</div>
     </div>
 {% endif %}
 

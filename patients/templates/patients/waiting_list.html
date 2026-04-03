@@ -1,187 +1,70 @@
 {% extends 'patients/base.html' %}
 
-{% block title %}قائمة الدور{% endblock %}
+{% block title %}قائمة الانتظار{% endblock %}
 
 {% block content %}
 
-<style>
-    .waiting-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 18px;
-        margin-top: 20px;
-    }
 
-    .waiting-card {
-        padding: 16px;
-        border-radius: 12px;
-        background: #ffffff;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: 0.2s;
-        border: 1px solid #e5e7eb;
-        min-height: 220px;
-    }
+<div class="waiting-list-header">
+    <h1 class="waiting-list-title">قائمة الدور للمرضى</h1>
+</div>
 
-    .waiting-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 16px rgba(0,0,0,0.15);
-    }
-
-    .waiting-card.first {
-        border: 2px solid #2e7d32;
-        background: linear-gradient(135deg, #f1fff3, #ddf7e3);
-    }
-
-    .queue-number {
-        font-size: 14px;
-        color: #666;
-        margin-bottom: 8px;
-        font-weight: bold;
-    }
-
-    .patient-name {
-        font-size: 24px;
-        font-weight: bold;
-        margin-bottom: 12px;
-        color: #1f2d3d;
-        line-height: 1.3;
-    }
-
-    .waiting-meta {
-        font-size: 14px;
-        margin-bottom: 6px;
-        color: #333;
-    }
-
-    .waiting-meta strong {
-        color: #1f2d3d;
-    }
-
-    .first-badge {
-        display: inline-block;
-        background: #2e7d32;
-        color: white;
-        border-radius: 999px;
-        padding: 4px 10px;
-        font-size: 12px;
-        font-weight: bold;
-        margin-bottom: 10px;
-    }
-
-    .actions {
-        margin-top: 14px;
-    }
-
-    .actions a {
-        margin-left: 10px;
-        text-decoration: none;
-        font-weight: bold;
-        font-size: 14px;
-    }
-
-    .message-box {
-        padding: 12px;
-        border-radius: 8px;
-        margin-bottom: 16px;
-        border: 1px solid;
-    }
-
-    .message-success {
-        background: #e8f5e9;
-        color: #1b5e20;
-        border-color: #c8e6c9;
-    }
-
-    .message-error {
-        background: #fff5f5;
-        color: #b02a37;
-        border-color: #f5c2c7;
-    }
-
-    .message-warning {
-        background: #fff8e1;
-        color: #8a6d1d;
-        border-color: #ffe082;
-    }
-
-    @media (max-width: 1200px) {
-        .waiting-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-
-    @media (max-width: 700px) {
-        .waiting-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
-
-<h1>قائمة الدور</h1>
-
-<p class="muted">ترتيب المرضى من الأقدم إلى الأحدث.</p>
+<p style="color: #64748b; font-size: 15px; margin-bottom: 25px;">ترتيب المرضى من الأقدم إلى الأحدث بناءً على وقت إدخال الزيارة.</p>
 
 {% if messages %}
     {% for message in messages %}
-        <div class="message-box
-            {% if message.tags == 'success' %}message-success{% endif %}
-            {% if message.tags == 'error' %}message-error{% endif %}
-            {% if message.tags == 'warning' %}message-warning{% endif %}
-        ">
-            {{ message }}
-        </div>
+    <div class="message-box
+                {% if message.tags == 'success' %}message-success{% endif %}
+                {% if message.tags == 'error' %}message-error{% endif %}
+                {% if message.tags == 'warning' %}message-warning{% endif %}">
+        {{ message }}
+    </div>
     {% endfor %}
 {% endif %}
 
 {% if waiting_items %}
-    <div class="waiting-grid">
-        {% for item in waiting_items %}
-            <div class="waiting-card {% if forloop.first %}first{% endif %}">
+<div class="waiting-grid">
+    {% for item in waiting_items %}
+    <div class="waiting-card-modern {% if forloop.first %}first-in-line{% endif %}">
+        <div class="queue-number-badge">
+            {% if forloop.first %}المريض التالي (الدور {{ item.queue_number }}){% else %}الدور المخصص: {{ item.queue_number }}{% endif %}
+        </div>
 
-                <div class="queue-number">
-                    الدور رقم {{ item.queue_number }}
-                </div>
+        <div class="patient-name">
+            {{ item.visit.patient.name }}
+        </div>
 
-                {% if forloop.first %}
-                    <div class="first-badge">المريض التالي</div>
-                {% endif %}
-
-                <div class="patient-name">
-                    {{ item.visit.patient.name }}
-                </div>
-
-                <p class="waiting-meta">
-                    <strong>رقم الملف:</strong> {{ item.visit.patient.file_number }}
-                </p>
-
-                <p class="waiting-meta">
-                    <strong>نوع الزيارة:</strong> {{ item.visit.get_visit_type_display }}
-                </p>
-
-                <p class="waiting-meta">
-                    <strong>الشكوى:</strong> {{ item.visit.chief_complaint|default:"—" }}
-                </p>
-
-                <p class="waiting-meta">
-                    <strong>الطبيب:</strong> {{ item.visit.assigned_doctor.username|default:"—" }}
-                </p>
-
-                <p class="waiting-meta">
-                    <strong>وقت الإدخال:</strong> {{ item.visit.created_at|time:"H:i" }}
-                </p>
-
-                <div class="actions">
-                    <a href="{% url 'patient_detail' item.visit.patient.id %}">فتح الملف</a>
-                    <a href="{% url 'nurse_edit_visit' item.visit.id %}">تعديل</a>
-                </div>
-
+        <div class="card-body">
+            <div class="info-row">
+                <strong>رقم الملف:</strong> <span>{{ item.visit.patient.file_number }}</span>
             </div>
-        {% endfor %}
+            <div class="info-row">
+                <strong>نوع الزيارة:</strong> <span>{{ item.visit.get_visit_type_display }}</span>
+            </div>
+            <div class="info-row">
+                <strong>الشكوى:</strong> <span style="display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">{{ item.visit.chief_complaint|default:"—" }}</span>
+            </div>
+            <div class="info-row">
+                <strong>الطبيب:</strong> <span>{{ item.visit.assigned_doctor.first_name|default:"—" }} {{ item.visit.assigned_doctor.last_name|default:"" }}</span>
+            </div>
+            <div class="info-row" style="margin-top: auto; padding-top: 10px;">
+                <strong>وقت الإدخال:</strong> <span style="color: #64748b; font-weight: 600;">{{ item.visit.created_at|time:"h:i A" }}</span>
+            </div>
+        </div>
+
+        <div class="card-actions">
+            <a href="{% url 'patient_detail' item.visit.patient.id %}" class="btn-action-primary">فتح الملف</a>
+            <a href="{% url 'nurse_edit_visit' item.visit.id %}" class="btn-action-outline">تعديل</a>
+        </div>
     </div>
+    {% endfor %}
+</div>
 {% else %}
-    <div class="card">
-        <p>لا يوجد مرضى في قائمة الدور حاليًا.</p>
-    </div>
+<div class="empty-state">
+    <div style="font-size: 40px; margin-bottom: 15px;">⏳</div>
+    <div style="font-weight: bold; color: #1e293b; margin-bottom: 8px;">لا يوجد مرضى في قائمة الدور حالياً</div>
+    <div>لا يوجد زيارات معلقة تتطلب العرض على الطبيب.</div>
+</div>
 {% endif %}
 
 {% endblock %}

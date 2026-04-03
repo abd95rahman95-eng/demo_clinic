@@ -909,31 +909,3 @@ document.addEventListener('keydown', function(e) {
 </script>
 
 {% endblock %}
-                {% if visit.imaging_requests %}
-                    <p><strong>طلبات الصور:</strong> {{ visit.imaging_requests }}</p>
-                {% endif %}
-                {% if visit.patient_instructions %}
-                    <p><strong>تعليمات للمريض:</strong> {{ visit.patient_instructions }}</p>
-                {% endif %}
-                {% if visit.follow_up_date %}
-                    <p><strong>موعد المراجعة القادم:</strong> {{ visit.follow_up_date }}</p>
-                {% endif %}
-                {% if visit.doctor_notes %}
-                    <p><strong>ملاحظات الطبيب:</strong> {{ visit.doctor_notes }}</p>
-                {% endif %}
-
-                <div class="actions" style="margin-top: 15px;">
-                    <a href="{% url 'edit_visit' visit.id %}">✏️ تعديل الزيارة</a>
-                    <a href="{% url 'delete_visit' visit.id %}">🗑️ حذف الزيارة</a>
-                </div>
-            </div>
-        {% endfor %}
-    {% else %}
-        <div class="card">
-            <p>لا توجد زيارات مكتملة لهذا المريض.</p>
-        </div>
-    {% endif %}
-{% endif %}
-
-<a href="{% url 'patient_list' %}" class="btn btn-secondary">رجوع لقائمة المرضى</a>
-{% endblock %}

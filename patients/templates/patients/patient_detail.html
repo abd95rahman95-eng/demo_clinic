@@ -191,7 +191,7 @@
     <h2>
         <span>{{ patient.name }}</span>
         <div style="display: flex; gap: 10px;">
-            <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">➕ إضافة زيارة تمريضية جديدة</a>
+            <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">إضافة زيارة تمريضية جديدة</a>
             <a href="{% url 'edit_patient' patient.id %}" class="btn-action btn-edit">✏️ تعديل</a>
             {% if is_doctor %}
                 <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_patient' patient.id %}', 'حذف المريض', '{{ patient.name|escapejs }}')">🗑️ حذف</button>
@@ -263,7 +263,7 @@
     {% else %}
     <div class="ui-empty-card">
         <h3 style="margin-bottom: 15px; color:#1a3d28;">إجراءات الممرضة</h3>
-        <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">➕ إضافة زيارة تمريضية جديدة</a>
+        <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">إضافة زيارة تمريضية جديدة</a>
     </div>
     {% endif %}
 {% endif %}
@@ -773,7 +773,7 @@ body {
 
     <div class="content">
 
-        <div class="section-title">👤 بيانات المريض</div>
+        <div class="section-title">بيانات المريض</div>
         <div class="patient-card">
             <h2>${p.name}</h2>
             <div class="patient-grid">

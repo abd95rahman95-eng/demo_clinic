@@ -9,7 +9,7 @@
 <div class="patient-list-header">
     <h1 class="patient-list-title">قائمة المرضى</h1>
     {% if request.user.groups.all.0.name == "Nurse" %}
-    <a href="{% url 'add_patient' %}" class="btn-submit">➕ إضافة مريض جديد</a>
+    <a href="{% url 'add_patient' %}" class="btn-submit">إضافة مريض جديد</a>
     {% endif %}
 </div>
 

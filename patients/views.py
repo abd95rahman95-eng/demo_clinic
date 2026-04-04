@@ -78,8 +78,6 @@ def dashboard_view(request):
 
 @login_required(login_url='login')
 def nurse_create_visit(request, patient_id):
-    if not is_nurse(request.user):
-        return redirect('patient_list')
 
     profile = UserProfile.objects.get(user=request.user)
     patient = get_object_or_404(Patient, id=patient_id)

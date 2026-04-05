@@ -426,8 +426,6 @@ def edit_visit(request, id):
 
 @login_required(login_url='login')
 def nurse_edit_visit(request, id):
-    if not is_nurse(request.user):
-        return redirect('patient_list')
 
     profile = UserProfile.objects.get(user=request.user)
     visit = get_object_or_404(Visit, id=id)

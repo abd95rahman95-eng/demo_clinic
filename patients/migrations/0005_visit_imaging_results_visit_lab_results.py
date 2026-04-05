@@ -11,9 +11,5 @@ class Migration(migrations.Migration):
 
     operations = [
        
-        migrations.AddField(
-            model_name='visit',
-            name='lab_results',
-            field=models.TextField(blank=True),
-        ),
+       
     ]

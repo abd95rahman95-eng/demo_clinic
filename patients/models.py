@@ -16,10 +16,16 @@ class UserProfile(models.Model):
         return self.user.username
 
 class Patient(models.Model):
+    gender_choices = [
+        ('male', 'ذكر'),
+        ('female', 'أنثى'),
+    ]
+
     clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     age = models.IntegerField()
     phone = models.CharField(max_length=20)
+    gender = models.CharField(max_length=10, choices=gender_choices, blank=True)
     address = models.CharField(max_length=255, blank=True) 
     file_number = models.CharField(max_length=50)
 

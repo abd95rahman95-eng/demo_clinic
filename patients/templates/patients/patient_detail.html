@@ -180,7 +180,14 @@
 <!-- Top Action Bar -->
 {% if is_doctor %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+    {% if patient.gender == 'male' %}
+    <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تقرير المريض : {{ patient.name }}</h1>
+    {% elif patient.gender == 'female' %}
+    <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تقرير المريضة : {{ patient.name }}</h1>
+    {% else %}
     <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تقرير المريض/ة : {{ patient.name }}</h1>
+    {% endif %}
+
     <button onclick="printReport()" class="btn" style="background: #1a6b3c; color: white; padding: 10px 24px; font-size: 15px; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(26,107,60,0.2);">
         🖨️ طباعة التقرير
     </button>
@@ -382,6 +389,7 @@
          data-file="{{ patient.file_number }}"
          data-age="{{ patient.age }}"
          data-phone="{{ patient.phone }}"
+         data-gender="{{ patient.get_gender_display }}"
          data-address="{{ patient.address }}"
          data-clinic="عيادة: {{ clinic_name }}"
          data-doctor="{{ request.user.first_name }} {{ request.user.last_name }}">

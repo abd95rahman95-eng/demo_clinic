@@ -10,12 +10,14 @@ class PatientForm(forms.ModelForm):
             'name': 'الاسم',
             'age': 'العمر',
             'phone': 'رقم الهاتف',
+            'gender': 'الجنس',
             'address': 'العنوان',
         }
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'age': forms.NumberInput(attrs={'class': 'form-control'}),
             'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'gender': forms.Select(attrs={'class': 'form-control'}),
             'address': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
@@ -25,6 +27,10 @@ class PatientForm(forms.ModelForm):
             raise forms.ValidationError("العمر يجب أن يكون رقمًا.")
         return age
 
+    def clean_gender(self):
+        gender = self.cleaned_data.get('gender')
+        if gender not in ['male', 'female']:
+            raise forms.ValidationError("الجنس يجب أن يكون 'ذكر' أو 'أنثى'.")
 
 class NurseVisitForm(forms.ModelForm):
     class Meta:

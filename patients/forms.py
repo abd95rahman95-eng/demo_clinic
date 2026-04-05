@@ -5,7 +5,7 @@ from .models import Visit, UserProfile, Patient
 class PatientForm(forms.ModelForm):
     class Meta:
         model = Patient
-        fields = ['name', 'age', 'phone', 'address']
+        fields = ['name', 'age', 'phone','gender', 'address']
         labels = {
             'name': 'الاسم',
             'age': 'العمر',
@@ -31,6 +31,7 @@ class PatientForm(forms.ModelForm):
         gender = self.cleaned_data.get('gender')
         if gender not in ['male', 'female']:
             raise forms.ValidationError("الجنس يجب أن يكون 'ذكر' أو 'أنثى'.")
+        return gender
 
 class NurseVisitForm(forms.ModelForm):
     class Meta:

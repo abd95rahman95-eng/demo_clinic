@@ -113,6 +113,7 @@ class DoctorVisitForm(forms.ModelForm):
             'doctor_notes',
             'lab_results',
             'imaging_results',
+            
         ]
         labels = {
             'history_of_present_illness': 'القصة المرضية الحالية',

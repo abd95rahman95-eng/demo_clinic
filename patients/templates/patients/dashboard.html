@@ -13,6 +13,8 @@
         <span>الدور: {{ user_role }}</span>
         <span>|</span>
         <span>اليوم: {{ formatted_date }}</span>
+        <span>|</span>
+        <span {% if request.user.userprofile.clinic.subscription_days_count < 3 %}style="color: #ef4444; font-weight: bold;"{% endif %}>الاشتراك المتبقي: {{ request.user.userprofile.clinic.subscription_days_left }}</span>
     </div>
 </div>
 

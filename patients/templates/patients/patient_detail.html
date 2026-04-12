@@ -180,14 +180,11 @@
 <!-- Top Action Bar -->
 {% if is_doctor %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-    {% if patient.gender == 'male' %}
+    {% if patient.gender == 'Male' %}
     <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تقرير المريض : {{ patient.name }}</h1>
-    {% elif patient.gender == 'female' %}
-    <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تقرير المريضة : {{ patient.name }}</h1>
     {% else %}
-    <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تقرير المريض/ة : {{ patient.name }}</h1>
+    <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تقرير المريضة : {{ patient.name }}</h1>
     {% endif %}
-
     <button onclick="printReport()" class="btn" style="background: #1a6b3c; color: white; padding: 10px 24px; font-size: 15px; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(26,107,60,0.2);">
         🖨️ طباعة التقرير
     </button>
@@ -198,7 +195,7 @@
     <h2>
         <span>{{ patient.name }}</span>
         <div style="display: flex; gap: 10px;">
-            <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">إضافة زيارة تمريضية جديدة</a>
+            <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">➕ إضافة زيارة تمريضية جديدة</a>
             <a href="{% url 'edit_patient' patient.id %}" class="btn-action btn-edit">✏️ تعديل</a>
             {% if is_doctor %}
                 <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_patient' patient.id %}', 'حذف المريض', '{{ patient.name|escapejs }}')">🗑️ حذف</button>
@@ -227,7 +224,11 @@
         {% if patient.gender %}
         <div class="patient-field">
             <div class="lbl">الجنس</div>
-            <div class="val">{{ patient.get_gender_display }}</div>
+            <div class="val">
+                {% if patient.gender|lower == 'male' %}ذكر
+                {% elif patient.gender|lower == 'female' %}أنثى
+                {% else %}{{ patient.get_gender_display }}{% endif %}
+            </div>
         </div>
         {% endif %}
         {% if patient.address %}
@@ -276,7 +277,7 @@
     {% else %}
     <div class="ui-empty-card">
         <h3 style="margin-bottom: 15px; color:#1a3d28;">إجراءات الممرضة</h3>
-        <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">إضافة زيارة تمريضية جديدة</a>
+        <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">➕ إضافة زيارة تمريضية جديدة</a>
     </div>
     {% endif %}
 {% endif %}
@@ -312,7 +313,6 @@
         </div>
         <div class="ui-actions-bar">
             <a href="{% url 'doctor_complete_visit' pending_visit.id %}" class="btn-action btn-complete">إكمال الزيارة الطبية</a>
-            <a href="{% url 'nurse_edit_visit' pending_visit.id %}" class="btn-action btn-edit">✏️ تعديل الزيارة</a>
         </div>
     </div>
 </div>
@@ -359,6 +359,46 @@
                 <div class="ui-sub-title medical-title">⚕️ القسم الطبي</div>
                 {% if visit.history_of_present_illness %}<div class="field-row"><span class="field-label">القصة المرضية الحالية:</span><span class="field-value">{{ visit.history_of_present_illness }}</span></div>{% endif %}
                 {% if visit.clinical_examination %}<div class="field-row"><span class="field-label">الفحص السريري:</span><span class="field-value">{{ visit.clinical_examination }}</span></div>{% endif %}
+
+                {% if patient.clinic.specialty == 'cardiology' %}
+                {% if visit.ecg_results %}<div class="field-row"><span class="field-label">نتائج تخطيط القلب:</span><span class="field-value">{{ visit.ecg_results }}</span></div>{% endif %}
+                {% if visit.ejection_fraction %}<div class="field-row"><span class="field-label">الكسر القذفي:</span><span class="field-value">{{ visit.ejection_fraction }}</span></div>{% endif %}
+                {% if visit.cardiac_history %}<div class="field-row"><span class="field-label">تاريخ أمراض القلب:</span><span class="field-value">{{ visit.cardiac_history }}</span></div>{% endif %}
+                {% if visit.chest_pain_type %}<div class="field-row"><span class="field-label">نوع ألم الصدر:</span><span class="field-value">{{ visit.chest_pain_type }}</span></div>{% endif %}
+                {% if visit.cardiac_medications %}<div class="field-row"><span class="field-label">أدوية القلب:</span><span class="field-value">{{ visit.cardiac_medications }}</span></div>{% endif %}
+                {% endif %}
+
+                {% if patient.clinic.specialty == 'neurology' %}
+                {% if visit.CT_MRI_findings %}<div class="field-row"><span class="field-label">نتائج الأشعة المقطعية والرنين المغناطيسي:</span><span class="field-value">{{ visit.CT_MRI_findings }}</span></div>{% endif %}
+                {% if visit.neurological_examination %}<div class="field-row"><span class="field-label">الفحص العصبي:</span><span class="field-value">{{ visit.neurological_examination }}</span></div>{% endif %}
+                {% endif %}
+
+                {% if patient.clinic.specialty == 'dermatology' %}
+                {% if visit.skin_examination %}<div class="field-row"><span class="field-label">فحص الجلد:</span><span class="field-value">{{ visit.skin_examination }}</span></div>{% endif %}
+                {% endif %}
+
+                {% if patient.clinic.specialty == 'orthopedics' %}
+                {% if visit.pain_location %}<div class="field-row"><span class="field-label">موقع الألم:</span><span class="field-value">{{ visit.pain_location }}</span></div>{% endif %}
+                {% if visit.pain_scale %}<div class="field-row"><span class="field-label">مقياس الألم:</span><span class="field-value">{{ visit.pain_scale }}</span></div>{% endif %}
+                {% if visit.injury_history %}<div class="field-row"><span class="field-label">تاريخ الإصابة:</span><span class="field-value">{{ visit.injury_history }}</span></div>{% endif %}
+                {% if visit.range_of_motion %}<div class="field-row"><span class="field-label">مدى الحركة:</span><span class="field-value">{{ visit.range_of_motion }}</span></div>{% endif %}
+                {% if visit.xray_findings %}<div class="field-row"><span class="field-label">نتائج الأشعة:</span><span class="field-value">{{ visit.xray_findings }}</span></div>{% endif %}
+                {% endif %}
+
+                {% if patient.clinic.specialty == 'gynecology' %}
+                {% if visit.last_menstrual_period %}<div class="field-row"><span class="field-label">آخر دورة شهرية:</span><span class="field-value">{{ visit.last_menstrual_period }}</span></div>{% endif %}
+                {% if visit.cycle_regularity %}<div class="field-row"><span class="field-label">انتظام الدورة:</span><span class="field-value">{{ visit.cycle_regularity }}</span></div>{% endif %}
+                {% if visit.contraception_method %}<div class="field-row"><span class="field-label">وسيلة منع الحمل:</span><span class="field-value">{{ visit.contraception_method }}</span></div>{% endif %}
+                {% if visit.obstetric_history %}<div class="field-row"><span class="field-label">تاريخ الولادة:</span><span class="field-value">{{ visit.obstetric_history }}</span></div>{% endif %}
+                <div class="ui-sub-title" style="color: #6c757d; background: #f8f9fa; border-right: 3px solid #6c757d; margin-top: 15px; margin-bottom: 10px;">متابعة الحمل</div>
+                {% if visit.gestational_age_weeks %}<div class="field-row"><span class="field-label">عمر الحمل بالأسابيع:</span><span class="field-value">{{ visit.gestational_age_weeks }}</span></div>{% endif %}
+                {% if visit.fundal_height %}<div class="field-row"><span class="field-label">ارتفاع قاع الرحم:</span><span class="field-value">{{ visit.fundal_height }}</span></div>{% endif %}
+                {% if visit.abdominal_circumference %}<div class="field-row"><span class="field-label">محيط البطن:</span><span class="field-value">{{ visit.abdominal_circumference }}</span></div>{% endif %}
+                {% if visit.fetal_heart_rate %}<div class="field-row"><span class="field-label">معدل ضربات قلب الجنين:</span><span class="field-value">{{ visit.fetal_heart_rate }}</span></div>{% endif %}
+                {% if visit.fetal_movement %}<div class="field-row"><span class="field-label">حركة الجنين:</span><span class="field-value">{{ visit.fetal_movement }}</span></div>{% endif %}
+                {% if visit.fetal_position %}<div class="field-row"><span class="field-label">وضع الجنين:</span><span class="field-value">{{ visit.fetal_position }}</span></div>{% endif %}
+                {% if visit.ultrasound_notes %}<div class="field-row"><span class="field-label">ملاحظات الموجات فوق الصوتية:</span><span class="field-value">{{ visit.ultrasound_notes }}</span></div>{% endif %}
+                {% endif %}
                 {% if visit.diagnosis %}<div class="field-row highlight"><span class="field-label">التشخيص:</span><span class="field-value">{{ visit.diagnosis }}</span></div>{% endif %}
                 {% if visit.treatment_plan %}<div class="field-row"><span class="field-label">الخطة العلاجية:</span><span class="field-value">{{ visit.treatment_plan }}</span></div>{% endif %}
                 {% if visit.prescription %}<div class="field-row"><span class="field-label">الوصفة الطبية:</span><span class="field-value">{{ visit.prescription }}</span></div>{% endif %}
@@ -396,7 +436,6 @@
          data-file="{{ patient.file_number }}"
          data-age="{{ patient.age }}"
          data-phone="{{ patient.phone }}"
-         data-gender="{{ patient.get_gender_display }}"
          data-address="{{ patient.address }}"
          data-clinic="عيادة: {{ clinic_name }}"
          data-doctor="{{ request.user.first_name }} {{ request.user.last_name }}">
@@ -417,14 +456,35 @@
          data-blood-sugar="{{ visit.blood_sugar }}"
          data-history="{{ visit.history_of_present_illness }}"
          data-examination="{{ visit.clinical_examination }}"
+         data-ecg_results="{{ visit.ecg_results }}"
+         data-ejection_fraction="{{ visit.ejection_fraction }}"
+         data-cardiac_history="{{ visit.cardiac_history }}"
+         data-chest_pain_type="{{ visit.chest_pain_type }}"
+         data-cardiac_medications="{{ visit.cardiac_medications }}"
+         data-pain_location="{{ visit.pain_location }}"
+         data-pain_scale="{{ visit.pain_scale }}"
+         data-injury_history="{{ visit.injury_history }}"
+         data-range_of_motion="{{ visit.range_of_motion }}"
+         data-xray_findings="{{ visit.xray_findings }}"
+         data-cycle_regularity="{{ visit.cycle_regularity }}"
+         data-contraception_method="{{ visit.contraception_method }}"
+         data-obstetric_history="{{ visit.obstetric_history }}"
+         data-fundal_height="{{ visit.fundal_height }}"
+         data-abdominal_circumference="{{ visit.abdominal_circumference }}"
+         data-fetal_heart_rate="{{ visit.fetal_heart_rate }}"
+         data-fetal_movement="{{ visit.fetal_movement }}"
+         data-fetal_position="{{ visit.fetal_position }}"
+         data-ultrasound_notes="{{ visit.ultrasound_notes }}"
          data-diagnosis="{{ visit.diagnosis }}"
          data-treatment="{{ visit.treatment_plan }}"
          data-prescription="{{ visit.prescription }}"
          data-lab="{{ visit.lab_requests }}"
          data-imaging="{{ visit.imaging_requests }}"
          data-instructions="{{ visit.patient_instructions }}"
-         data-followup="{{ visit.follow_up_date }}"
-         data-doctor-notes="{{ visit.doctor_notes }}">
+         data-doctor-notes="{{ visit.doctor_notes }}"
+         data-ct_mri_findings="{{ visit.CT_MRI_findings }}"
+         data-neurological_examination="{{ visit.neurological_examination }}"
+         data-skin_examination="{{ visit.skin_examination }}">
     </div>
     {% endfor %}
 
@@ -476,6 +536,27 @@ function printReport() {
         const medFields = [
             { label: 'القصة المرضية الحالية', value: d.history,      cls: '' },
             { label: 'الفحص السريري',          value: d.examination,  cls: '' },
+            { label: 'نتائج تخطيط القلب', value: d.ecg_results, cls: '' },
+            { label: 'الكسر القذفي', value: d.ejection_fraction, cls: '' },
+            { label: 'تاريخ أمراض القلب', value: d.cardiac_history, cls: '' },
+            { label: 'نوع ألم الصدر', value: d.chest_pain_type, cls: '' },
+            { label: 'أدوية القلب', value: d.cardiac_medications, cls: '' },
+            { label: 'موقع الألم', value: d.pain_location, cls: '' },
+            { label: 'مقياس الألم', value: d.pain_scale, cls: '' },
+            { label: 'تاريخ الإصابة', value: d.injury_history, cls: '' },
+            { label: 'مدى الحركة', value: d.range_of_motion, cls: '' },
+            { label: 'نتائج الأشعة', value: d.xray_findings, cls: '' },
+            { label: 'آخر دورة شهرية', value: d.last_menstrual_period, cls: '' },
+            { label: 'انتظام الدورة', value: d.cycle_regularity, cls: '' },
+            { label: 'وسيلة منع الحمل', value: d.contraception_method, cls: '' },
+            { label: 'تاريخ الولادة', value: d.obstetric_history, cls: '' },
+            { label: 'عمر الحمل بالأسابيع', value: d.gestational_age_weeks, cls: '' },
+            { label: 'ارتفاع قاع الرحم', value: d.fundal_height, cls: '' },
+            { label: 'محيط البطن', value: d.abdominal_circumference, cls: '' },
+            { label: 'معدل ضربات قلب الجنين', value: d.fetal_heart_rate, cls: '' },
+            { label: 'حركة الجنين', value: d.fetal_movement, cls: '' },
+            { label: 'وضع الجنين', value: d.fetal_position, cls: '' },
+            { label: 'ملاحظات الموجات فوق الصوتية', value: d.ultrasound_notes, cls: '' },
             { label: 'التشخيص',                value: d.diagnosis,    cls: 'highlight' },
             { label: 'الخطة العلاجية',          value: d.treatment,    cls: '' },
             { label: 'الوصفة الطبية',           value: d.prescription, cls: '' },
@@ -484,6 +565,9 @@ function printReport() {
             { label: 'تعليمات للمريض',          value: d.instructions, cls: '' },
             { label: 'موعد المراجعة القادم',    value: d.followup,     cls: 'followup' },
             { label: 'ملاحظات الطبيب',          value: d.doctorNotes,  cls: '' },
+            { label: 'نتائج الأشعة المقطعية والرنين المغناطيسي', value: d.CT_MRI_findings, cls: '' },
+            { label: 'الفحص العصبي', value: d.neurological_examination, cls: '' },
+            { label: 'فحص الجلد', value: d.skin_examination, cls: '' },
         ].filter(f => f.value);
 
         const medHTML = medFields.map(f => `
@@ -788,7 +872,7 @@ body {
 
     <div class="content">
 
-        <div class="section-title">بيانات المريض</div>
+        <div class="section-title">👤 بيانات المريض</div>
         <div class="patient-card">
             <h2>${p.name}</h2>
             <div class="patient-grid">
@@ -798,6 +882,7 @@ body {
                 </div>
                 ${p.age     ? `<div class="patient-field"><div class="lbl">العمر</div><div class="val">${p.age}</div></div>` : ''}
                 ${p.phone   ? `<div class="patient-field"><div class="lbl">الهاتف</div><div class="val">${p.phone}</div></div>` : ''}
+                ${p.gender  ? `<div class="patient-field"><div class="lbl">الجنس</div><div class="val">${p.gender}</div></div>` : ''}
                 ${p.address ? `<div class="patient-field wide"><div class="lbl">العنوان</div><div class="val">${p.address}</div></div>` : ''}
             </div>
         </div>

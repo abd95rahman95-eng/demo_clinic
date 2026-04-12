@@ -1,13 +1,14 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
-from .models import Patient, Visit, UserProfile
+from .models import Patient, Visit, UserProfile, VisitAttachment
 from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
-from .forms import PatientForm, NurseVisitForm, DoctorVisitForm
+from .forms import PatientForm, NurseVisitForm, DoctorVisitForm, VisitAttachmentForm, SignupRequestForm
 from django.contrib.auth.models import User
 from datetime import date
+
 
 
 @login_required(login_url='login')
@@ -160,29 +161,41 @@ def doctor_complete_visit(request, visit_id):
         return redirect('patient_list')
 
     profile = UserProfile.objects.get(user=request.user)
-    visit = get_object_or_404(Visit, id=visit_id)
-
+    clinic = profile.clinic
+    visit = get_object_or_404(Visit, id=visit_id, clinic=clinic)
+    attachment_form = VisitAttachmentForm()
     if visit.clinic != profile.clinic:
         return redirect('patient_list')
 
     if visit.assigned_doctor != request.user:
         return redirect('doctor_pending_visits')
-
     if request.method == 'POST':
         form = DoctorVisitForm(request.POST, instance=visit)
+        attachment_form = VisitAttachmentForm(request.POST, request.FILES)
         if form.is_valid():
             visit = form.save(commit=False)
             visit.status = 'doctor_completed'
             visit.save()
-
             messages.success(request, "تم إكمال الزيارة بنجاح")
+
+            if attachment_form.is_valid():
+                attachment = attachment_form.save(commit=False)
+                attachment.visit = visit
+                attachment.save()
+                messages.success(request, "تم إضافة المرفق بنجاح")
+                
             return redirect('patient_detail', id=visit.patient.id)
+    
     else:
         form = DoctorVisitForm(instance=visit)
 
     return render(request, 'patients/doctor_complete_visit.html', {
         'form': form,
         'visit': visit,
+        'attachment_form': attachment_form,
+        'clinic': clinic,
+        'specialty': clinic.specialty,
+        'is_pro': clinic.is_pro,
     })
 
 @login_required(login_url='login')
@@ -254,7 +267,7 @@ def patient_list(request):
             if item['status_key'] == filter_type
         ]
 
-    paginator = Paginator(patients_with_status_all, 4)
+    paginator = Paginator(patients_with_status_all, 5)
     page_number = request.GET.get('page')
     patients_with_status = paginator.get_page(page_number)
 
@@ -281,6 +294,7 @@ def patient_detail(request, id):
 
     visits = None
     sort_order = request.GET.get('sort', 'newest')
+
     if is_doctor(request.user):
         visits_query = Visit.objects.filter(
             patient=patient,
@@ -411,6 +425,9 @@ def edit_visit(request, id):
         messages.error(request, "لا يمكن تعديل زيارة غير مكتملة.")
         return redirect('doctor_pending_visits')
 
+    clinic = profile.clinic
+    attachment_form = VisitAttachmentForm()
+
     form = DoctorVisitForm(request.POST or None, instance=visit)
 
     if request.method == 'POST':
@@ -422,10 +439,16 @@ def edit_visit(request, id):
     return render(request, 'patients/edit_visit.html', {
         'form': form,
         'visit': visit,
+        'clinic': clinic,
+        'attachment_form': attachment_form,
+        'specialty': clinic.specialty,
+        'is_pro': clinic.is_pro,
     })
 
 @login_required(login_url='login')
 def nurse_edit_visit(request, id):
+    if not is_nurse(request.user):
+        return redirect('patient_list')
 
     profile = UserProfile.objects.get(user=request.user)
     visit = get_object_or_404(Visit, id=id)
@@ -465,8 +488,14 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
 
         if user is not None:
-            login(request, user)
+            # تحقق مما إذا كان اشتراك العيادة نشطاً
+            if hasattr(user, 'userprofile'):
+                clinic = user.userprofile.clinic
+                if not clinic.is_active_subscription:
+                    return render(request, 'patients/login.html', {'error': 'انتهت صلاحية اشتراك العيادة أو الفترة التجريبية. يرجى التواصل مع الإدارة لتجديد الاشتراك.'})
 
+            login(request, user)
+            
             # احتفظ بجلسة واحدة نشطة لكل مستخدم
             from django.contrib.sessions.models import Session
             from django.utils import timezone
@@ -477,7 +506,7 @@ def login_view(request):
                     data = session.get_decoded()
                     if str(data.get('_auth_user_id', '')) == str(user.id):
                         session.delete()
-
+                        
             return redirect('dashboard')
         else:
             return render(request, 'patients/login.html', {'error': 'اسم المستخدم أو كلمة المرور غير صحيحة'})
@@ -500,3 +529,18 @@ def home_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
     return redirect('login')
+
+
+def signup_request_view(request):
+    if request.method == "POST":
+        form = SignupRequestForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return render(request, "patients/signup_success.html")
+    else:
+        form = SignupRequestForm()
+
+    return render(request, "patients/signup_request.html", {"form": form})
+
+def pricing_view(request):
+    return render(request, "patients/pricing.html")

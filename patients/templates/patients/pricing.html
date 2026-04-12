@@ -1,0 +1,261 @@
+{% extends 'patients/base.html' %}
+{% load static %}
+
+{% block title %}الأسعار والباقات | نظام العيادة{% endblock %}
+
+{% block content %}
+<style>
+    body {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        background-attachment: fixed;
+    }
+    .navbar {
+        display: none !important;
+    }
+
+    .pricing-container {
+        max-width: 1100px;
+        margin: 60px auto;
+        padding: 0 20px;
+        font-family: inherit;
+    }
+
+    .pricing-header {
+        text-align: center;
+        margin-bottom: 50px;
+    }
+
+    .pricing-header h1 {
+        font-size: 36px;
+        color: #1a3d28;
+        font-weight: 800;
+        margin-bottom: 15px;
+    }
+
+    .pricing-header p {
+        font-size: 18px;
+        color: #475569;
+    }
+
+    .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 30px;
+        margin-bottom: 50px;
+    }
+
+    .pricing-card {
+        background: white;
+        border-radius: 20px;
+        padding: 40px 30px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(26,107,60,0.08);
+        border: 1px solid #c5deca;
+        position: relative;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .pricing-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(26,107,60,0.15);
+    }
+
+    .pricing-card.featured {
+        background: #1a6b3c;
+        color: white;
+        transform: scale(1.05);
+        border: none;
+    }
+
+    .pricing-card.featured:hover {
+        transform: scale(1.05) translateY(-5px);
+    }
+
+    @media (max-width: 900px) {
+        .pricing-card.featured {
+            transform: scale(1);
+        }
+        .pricing-card.featured:hover {
+            transform: scale(1) translateY(-5px);
+        }
+    }
+
+    .badge {
+        position: absolute;
+        top: -15px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #fbbf24;
+        color: #78350f;
+        padding: 6px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 14px;
+        white-space: nowrap;
+        box-shadow: 0 4px 10px rgba(251, 191, 36, 0.3);
+    }
+
+    .card-title {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 15px;
+        color: inherit;
+    }
+
+    .card-price {
+        font-size: 42px;
+        font-weight: 800;
+        margin-bottom: 5px;
+    }
+
+    .card-price span {
+        font-size: 18px;
+        font-weight: normal;
+        opacity: 0.8;
+    }
+
+    .card-original-price {
+        text-decoration: line-through;
+        color: #94a3b8;
+        font-size: 18px;
+        margin-bottom: 20px;
+        opacity: 0.8;
+    }
+
+    .card-features {
+        list-style: none;
+        padding: 0;
+        margin: 30px 0;
+        text-align: right;
+    }
+
+    .card-features li {
+        margin-bottom: 12px;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .card-features li::before {
+        content: '✓';
+        background: #10b981;
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .card-features.light li::before {
+        background: white;
+        color: #10b981;
+    }
+
+    .btn-choose {
+        display: block;
+        width: 100%;
+        padding: 15px;
+        border-radius: 12px;
+        font-size: 18px;
+        font-weight: bold;
+        text-decoration: none;
+        transition: all 0.3s;
+        box-sizing: border-box;
+    }
+
+    .btn-yellow {
+         background: #fbbf24;
+         color: #78350f;
+         border: none;
+         box-shadow: 0 5px 15px rgba(251, 191, 36, 0.3);
+    }
+    
+    .btn-yellow:hover {
+         background: #f59e0b;
+         transform: translateY(-2px);
+    }
+
+    .action-container {
+        text-align: center;
+        margin-top: 50px;
+    }
+
+    .login-return {
+        display: inline-block;
+        margin-top: 20px;
+        color: #64748b;
+        text-decoration: none;
+        font-weight: 600;
+        transition: color 0.3s;
+    }
+
+    .login-return:hover {
+        color: #1a3d28;
+    }
+
+</style>
+
+<div class="pricing-container">
+    <div class="pricing-header">
+        <h1>الأسعار والباقات</h1>
+        <p>باقات مرنة ومناسبة لجميع العيادات، مع <strong>فترة تجريبية مجانية</strong> لمدة 30 يوماً للمشتركين الجدد.</p>
+    </div>
+
+    <div class="pricing-grid">
+        <!-- Trial Card -->
+        <div class="pricing-card">
+            <h2 class="card-title" style="color: #1a3d28;">الفترة التجريبية</h2>
+            <div class="card-price">مجاناً<span> / 30 يوم</span></div>
+            <div style="height: 47px;"></div> <!-- visual spacer -->
+            
+            <ul class="card-features">
+                <li>تجربة كاملة للنظام لمدة 30 يوماً</li>
+                <li>إدارة ملفات المرضى غير المحدودة</li>
+                <li>إدارة الزيارات ودور المرضى</li>
+                <li>تخصصات متنوعة للطبيب والممرض</li>
+            </ul>
+        </div>
+
+        <!-- Annual Card (Featured) -->
+        <div class="pricing-card featured">
+            <div class="badge">وفر 50% ✨ الأفضل مبيعاً</div>
+            <h2 class="card-title">الباقة السنوية</h2>
+            <div class="card-price">120$<span> / سنوياً</span></div>
+            <div class="card-original-price">بدلاً من 240$</div>
+            
+            <ul class="card-features light">
+                <li>وصول مستمر لمدة سنة كاملة</li>
+                <li>خصم 50% فوري ومضمون</li>
+                <li>الوصول الدائم للتحديثات الجديدة</li>
+                <li>دعم فني على مدار العام</li>
+            </ul>
+        </div>
+
+        <!-- Monthly Card -->
+        <div class="pricing-card">
+            <h2 class="card-title" style="color: #1a3d28;">الباقة الشهرية</h2>
+            <div class="card-price">15$<span> / شهرياً</span></div>
+            <div class="card-original-price">بدلاً من 20$</div>
+            
+            <ul class="card-features">
+                <li>دفع شهر بشهر بمرونة فائقة</li>
+                <li>نفس مميزات الفترة التجريبية</li>
+                <li>تحديثات مجانية طوال فترة الاشتراك</li>
+                <li>دعم فني خلال أوقات الدوام</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="action-container">
+        <a href="{% url 'signup_request' %}" class="btn-choose btn-yellow" style="display:inline-block; max-width: 400px; font-size: 22px;">سجل لطلب عيادتك الآن!</a>
+        <br>
+        <a href="{% url 'login' %}" class="login-return">العودة لتسجيل الدخول</a>
+    </div>
+</div>
+{% endblock %}

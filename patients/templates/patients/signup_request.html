@@ -1,0 +1,83 @@
+{% extends "patients/base.html" %}
+
+{% block title %}طلب إنشاء حساب{% endblock %}
+
+{% block content %}
+<div class="patient-view-wrapper">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+        <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">طلب إنشاء حساب عيادة</h1>
+    </div>
+
+    <div class="ui-form-card">
+        <p class="meta" style="margin-bottom: 20px; color: #666; font-size: 1.1em;">املأ المعلومات أدناه وسيتم التواصل معك قريبًا للتحقق من البيانات وتفعيل حساب العيادة.</p>
+
+        <form method="post">
+            {% csrf_token %}
+
+            {% if form.errors %}
+                <div class="error-card">
+                    <h3>⚠️ يرجى تصحيح الأخطاء أدناه</h3>
+                    {{ form.errors }}
+                </div>
+            {% endif %}
+
+            <div class="section-title">بيانات العيادة الأساسية</div>
+            <div class="form-grid-layout">
+                <div class="form-group full-width">
+                    <label>{{ form.clinic_name.label }}</label>
+                    {{ form.clinic_name }}
+                </div>
+                <div class="form-group full-width">
+                    <label>{{ form.clinic_specialty.label }}</label>
+                    {{ form.clinic_specialty }}
+                </div>
+                <div class="form-group full-width">
+                    <label>{{ form.city.label }}</label>
+                    {{ form.city }}
+                </div>
+            </div>
+
+            <div class="section-title">معلومات الطبيب المسؤول</div>
+            <div class="form-grid-layout">
+                <div class="form-group">
+                    <label>{{ form.doctor_name.label }}</label>
+                    {{ form.doctor_name }}
+                </div>
+                <div class="form-group">
+                    <label>{{ form.doctor_phone.label }}</label>
+                    {{ form.doctor_phone }}
+                </div>
+                <div class="form-group full-width">
+                    <label>{{ form.doctor_email.label }}</label>
+                    {{ form.doctor_email }}
+                </div>
+            </div>
+
+            <div class="section-title">بيانات الممرض (اختياري)</div>
+            <div class="form-grid-layout">
+                <div class="form-group">
+                    <label>{{ form.nurse_name.label }}</label>
+                    {{ form.nurse_name }}
+                </div>
+                <div class="form-group">
+                    <label>{{ form.nurse_phone.label }}</label>
+                    {{ form.nurse_phone }}
+                </div>
+            </div>
+
+            <div class="section-title">معلومات إضافية</div>
+            <div class="form-grid-layout">
+                <div class="form-group full-width">
+                    <label>{{ form.notes.label }}</label>
+                    {{ form.notes }}
+                </div>
+            </div>
+
+            <div class="form-actions" style="margin-top: 30px;">
+                <button type="submit" class="btn-submit">إرسال الطلب</button>
+                <a href="{% url 'login' %}" class="btn-cancel">إلغاء</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,209 @@
+{% load static %}
+
+{%comment%} ─────────────────────────────────────────────────────────────────────────
+   Site footer — shared across the dashboard, login, and pricing pages.
+   Right side (in RTL): logo + slogan + platform description.
+   Left side (in RTL):  contact-us, plans & pricing, social icons.
+   ───────────────────────────────────────────────────────────────────── {%endcomment%}
+
+<style>
+    .site-footer {
+        background: linear-gradient(135deg, #0f3d22 0%, #1a6b3c 100%);
+        color: #ffffff;
+        padding: 50px 30px 22px 30px;
+        margin-top: 60px;
+        position: relative;
+        overflow: hidden;
+    }
+    .site-footer::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #f0a500, #ffe082, #1a6b3c);
+    }
+
+    .site-footer-inner {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        gap: 40px;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    /* Right column (logo + slogan + desc) */
+    .footer-brand {
+        flex: 1 1 320px;
+        max-width: 460px;
+    }
+    .footer-brand-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 10px;
+    }
+    .footer-logo {
+        width: 112px;
+        height: 56px;
+        border-radius: 14px;
+        /*background: white;*/
+        padding: 6px;
+        /*box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);*/
+        object-fit: contain;
+    }
+    
+    .footer-slogan {
+        font-size: 15px;
+        font-weight: 700;
+        color: #ffe082;
+        margin: 8px 0 14px 0;
+        letter-spacing: 1.5px;
+    }
+    .footer-desc {
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 13.5px;
+        line-height: 1.85;
+        margin: 0;
+    }
+
+    /* Left column (links + socials) */
+    .footer-links {
+        flex: 1 1 280px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        align-items: flex-start;
+        max-width: 360px;
+        padding: 35px 30px;
+    }
+    @media (min-width: 720px) {
+        .footer-links { align-items: flex-end; }
+    }
+    .footer-links-title {
+        font-size: 15px;
+        font-weight: 800;
+        color: #ffe082;
+        margin: 0 0 4px 0;
+        letter-spacing: 0.3px;
+    }
+    .footer-links-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    @media (min-width: 720px) {
+        .footer-links-list { align-items: flex-end; }
+    }
+    .footer-links-list a {
+        color: rgba(255, 255, 255, 0.85);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+        transition: color 0.15s ease, transform 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .footer-links-list a:hover {
+        color: #ffe082;
+        transform: translateX(-3px);
+    }
+
+    /* Social icons */
+    .footer-social-row {
+        display: flex;
+        gap: 12px;
+    }
+    .footer-social {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.12);
+        color: white;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        border: 1.5px solid rgba(255, 255, 255, 0.25);
+    }
+    .footer-social:hover {
+        background: white;
+        color: #1a6b3c;
+        transform: translateY(-3px);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+    }
+    .footer-social svg { width: 18px; height: 18px; }
+    .footer-social i { font-size: 17px; }
+
+    /* Bottom bar */
+    .site-footer-bottom {
+        max-width: 1200px;
+        margin: 30px auto 0 auto;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+        text-align: center;
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 12.5px;
+    }
+
+    @media (max-width: 720px) {
+        .site-footer { padding: 40px 20px 18px 20px; }
+        .site-footer-inner { gap: 28px; }
+        .footer-brand, .footer-links { max-width: 100%; }
+    }
+</style>
+
+<footer class="site-footer">
+    <div class="site-footer-inner">
+
+        {# Right side — brand + slogan + description #}
+        <div class="footer-brand">
+            <div class="footer-brand-row">
+                <img src="{% static 'patients/images/nav_logo.png' %}" alt="عيادتك" class="footer-logo">
+                
+            </div>
+            <div class="footer-slogan">سهولة . تنظيم . أمان</div>
+            <p class="footer-desc">
+                منصة عيادتك توفر نظاماً متكاملاً لإدارة العيادات الطبية بكفاءة، يجمع بين سهولة الاستخدام وتنظيم سير العمل بين الطبيب والممرض، مع حماية متقدمة للبيانات الطبية ومعلومات المرضى.
+                نهدف إلى تمكين العيادات من تقديم رعاية صحية أفضل عبر أدوات رقمية ذكية وعصرية.
+            </p>
+        </div>
+
+        {# Left side — links + social icons #}
+        <div class="footer-links">
+            <div>
+                
+                <ul class="footer-links-list">
+                    <li><a href="{% url 'contact_us' %}"><i class="fa-solid fa-envelope"></i> اتصل بنا</a></li>
+                    <li><a href="{% url 'pricing' %}"><i class="fa-solid fa-tags"></i> الباقات والأسعار</a></li>
+                </ul>
+            </div>
+
+            <div>
+                
+                <div class="footer-social-row">
+                    <a href="https://facebook.com/" target="_blank" rel="noopener noreferrer" class="footer-social" aria-label="فيسبوك">
+                        <i class="fa-brands fa-facebook-f"></i>
+                    </a>
+                    <a href="https://instagram.com/" target="_blank" rel="noopener noreferrer" class="footer-social" aria-label="انستغرام">
+                        <i class="fa-brands fa-instagram"></i>
+                    </a>
+                    <a href="https://wa.me/963967964600" target="_blank" rel="noopener noreferrer" class="footer-social" aria-label="واتساب">
+                        <i class="fa-brands fa-whatsapp"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="site-footer-bottom">
+        &copy; {% now "Y" %} عيادتك (eyadatak.com). جميع الحقوق محفوظة.
+    </div>
+</footer>

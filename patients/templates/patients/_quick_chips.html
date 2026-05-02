@@ -1,0 +1,13 @@
+{% comment %}
+Quick-pick chips partial.
+Usage example:
+    include 'patients/_quick_chips.html' with field_id=form.chief_complaint.id_for_label chips=quick_picks.chief_complaint
+Renders nothing when `chips` is empty.
+{% endcomment %}
+{% if chips %}
+<div class="quick-chips" data-target="{{ field_id }}">
+    {% for chip in chips %}
+    <button type="button" class="quick-chip" data-value="{{ chip }}">{{ chip }}</button>
+    {% endfor %}
+</div>
+{% endif %}

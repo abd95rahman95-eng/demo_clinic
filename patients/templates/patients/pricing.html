@@ -199,6 +199,171 @@
         color: #1a3d28;
     }
 
+    /* ── AI assistance pricing section ───────────────────────────── */
+    .ai-pricing-section {
+        margin-top: 70px;
+        padding-top: 50px;
+        border-top: 2px dashed #c5deca;
+    }
+
+    .ai-pricing-header {
+        text-align: center;
+        margin-bottom: 40px;
+    }
+
+    .ai-pricing-header .ai-eyebrow {
+        display: inline-block;
+        background: #e0f2fe;
+        color: #075985;
+        padding: 5px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 14px;
+    }
+
+    .ai-pricing-header h2 {
+        font-size: 30px;
+        color: #1a3d28;
+        font-weight: 800;
+        margin: 0 0 10px 0;
+    }
+
+    .ai-pricing-header p {
+        font-size: 16px;
+        color: #475569;
+        max-width: 720px;
+        margin: 0 auto;
+        line-height: 1.7;
+    }
+
+    .ai-pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 24px;
+        max-width: 980px;
+        margin: 0 auto;
+    }
+
+    .ai-card {
+        background: white;
+        border-radius: 18px;
+        padding: 30px 26px 26px;
+        text-align: center;
+        border: 1px solid #c5deca;
+        box-shadow: 0 8px 24px rgba(26, 107, 60, 0.07);
+        position: relative;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .ai-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 16px 36px rgba(26, 107, 60, 0.13);
+    }
+
+    .ai-card.featured {
+        background: linear-gradient(135deg, #1a6b3c 0%, #166534 100%);
+        color: white;
+        border: none;
+    }
+    .ai-card.featured .ai-card-title,
+    .ai-card.featured .ai-card-attempts,
+    .ai-card.featured .ai-card-price,
+    .ai-card.featured .ai-card-saving { color: white; }
+
+    .ai-card .ai-badge {
+        position: absolute;
+        top: -14px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #fbbf24;
+        color: #78350f;
+        padding: 5px 14px;
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: 12px;
+        white-space: nowrap;
+        box-shadow: 0 4px 10px rgba(251, 191, 36, 0.3);
+    }
+
+    .ai-card-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: #1a3d28;
+        margin-bottom: 8px;
+        letter-spacing: 0.2px;
+    }
+
+    .ai-card-attempts {
+        font-size: 38px;
+        font-weight: 900;
+        color: #1a3d28;
+        line-height: 1;
+        margin: 14px 0 4px 0;
+    }
+    .ai-card-attempts span {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        opacity: 0.75;
+        margin-top: 4px;
+    }
+
+    .ai-card-price {
+        font-size: 28px;
+        font-weight: 800;
+        color: #1a3d28;
+        margin: 18px 0 4px 0;
+    }
+    .ai-card-price small {
+        font-size: 14px;
+        font-weight: 600;
+        opacity: 0.8;
+        margin-right: 4px;
+    }
+
+    .ai-card-saving {
+        font-size: 12px;
+        color: #16a34a;
+        font-weight: 700;
+        margin-bottom: 18px;
+        min-height: 18px;
+    }
+    .ai-card.featured .ai-card-saving { color: #fde68a; }
+
+    .ai-card .ai-card-cta {
+        display: inline-block;
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 10px;
+        background: #1a6b3c;
+        color: white;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 14px;
+        transition: all 0.2s ease;
+        box-sizing: border-box;
+        border: none;
+    }
+    .ai-card .ai-card-cta:hover { background: #145c32; }
+    .ai-card.featured .ai-card-cta {
+        background: #fbbf24;
+        color: #78350f;
+    }
+    .ai-card.featured .ai-card-cta:hover { background: #f59e0b; }
+
+    .ai-pricing-note {
+        max-width: 900px;
+        margin: 28px auto 0;
+        text-align: center;
+        font-size: 13px;
+        color: #64748b;
+        background: #f8fbf9;
+        border: 1px dashed #c5deca;
+        border-radius: 10px;
+        padding: 14px 18px;
+        line-height: 1.7;
+    }
+
 </style>
 
 <div class="pricing-container">
@@ -224,7 +389,7 @@
 
         <!-- Annual Card (Featured) -->
         <div class="pricing-card featured">
-            <div class="badge">وفر 50% ✨ الأفضل مبيعاً</div>
+            <div class="badge">وفر 50% <i class="fa-solid fa-wand-magic-sparkles"></i> الأفضل مبيعاً</div>
             <h2 class="card-title">الباقة السنوية</h2>
             <div class="card-price">120$<span> / سنوياً</span></div>
             <div class="card-original-price">بدلاً من 240$</div>
@@ -252,10 +417,67 @@
         </div>
     </div>
 
+    {# ─── AI assistance pricing — top-up packs ───────────────────────── #}
+    <section class="ai-pricing-section">
+        <div class="ai-pricing-header">
+            <span class="ai-eyebrow"><i class="fa-solid fa-robot"></i> المساعد الذكي</span>
+            <h2>باقات تحليلات المساعد الذكي</h2>
+            <p>
+                تحصل كل عيادة على <strong>3 تحليلات مجانية يومياً</strong>. عند انتهاء الحصة اليومية،
+                يتم استخدام التحليلات المشتراة من الباقات أدناه. اختر الباقة المناسبة لحجم عملك.
+            </p>
+        </div>
+
+        <div class="ai-pricing-grid">
+            <!-- Starter -->
+            <div class="ai-card">
+                <div class="ai-card-title">باقة البداية</div>
+                <div class="ai-card-attempts">25
+                    <span>تحليل ذكي</span>
+                </div>
+                <div class="ai-card-price"><small>$</small>2.5</div>
+                <div class="ai-card-saving">≈ 0.10$ لكل تحليل</div>
+                <a href="{% url 'contact_us' %}" class="ai-card-cta">اطلب الباقة</a>
+            </div>
+
+            <!-- Best value (featured) -->
+            <div class="ai-card featured">
+                <div class="ai-badge">الأكثر طلباً <i class="fa-solid fa-fire"></i></div>
+                <div class="ai-card-title">الباقة المتوسطة</div>
+                <div class="ai-card-attempts">50
+                    <span>تحليل ذكي</span>
+                </div>
+                <div class="ai-card-price"><small>$</small>4.5</div>
+                <div class="ai-card-saving">≈ 0.09$ لكل تحليل · توفير 10%</div>
+                <a href="{% url 'contact_us' %}" class="ai-card-cta">اطلب الباقة</a>
+            </div>
+
+            <!-- Pro -->
+            <div class="ai-card">
+                <div class="ai-card-title">الباقة الاحترافية</div>
+                <div class="ai-card-attempts">100
+                    <span>تحليل ذكي</span>
+                </div>
+                <div class="ai-card-price"><small>$</small>7.5</div>
+                <div class="ai-card-saving">≈ 0.075$ لكل تحليل · توفير 25%</div>
+                <a href="{% url 'contact_us' %}" class="ai-card-cta">اطلب الباقة</a>
+            </div>
+        </div>
+
+        <div class="ai-pricing-note">
+            <i class="fa-solid fa-lightbulb" style="color:#f59e0b;"></i>
+            لا تنتهي صلاحية التحليلات المشتراة — تبقى متاحة على رصيد عيادتك حتى تستهلكها بالكامل.
+            للاستفسار أو طلب باقة مخصصة بكميات أكبر، يرجى <a href="{% url 'contact_us' %}" style="color:#1a6b3c; font-weight:700;">التواصل معنا</a>.
+        </div>
+    </section>
+
     <div class="action-container">
         <a href="{% url 'signup_request' %}" class="btn-choose btn-yellow" style="display:inline-block; max-width: 400px; font-size: 22px;">سجل لطلب عيادتك الآن!</a>
         <br>
         <a href="{% url 'login' %}" class="login-return">العودة لتسجيل الدخول</a>
     </div>
 </div>
+
 {% endblock %}
+
+{% block footer %}{% include 'patients/_site_footer.html' %}{% endblock %}

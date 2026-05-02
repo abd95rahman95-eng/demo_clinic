@@ -1,0 +1,60 @@
+{% load static %}{
+  "name": "عيادتك — Eyadatak Clinic",
+  "short_name": "عيادتك",
+  "description": "نظام إدارة العيادات الطبية المتكامل — Eyadatak clinic management.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/patients/dashboard/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1a6b3c",
+  "theme_color": "#1a6b3c",
+  "categories": ["medical", "productivity", "business"],
+  "icons": [
+    {
+      "src": "{% static 'patients/images/logo.png' %}",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "{% static 'patients/images/logo.png' %}",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "{% static 'patients/images/logo.png' %}",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "{% static 'patients/images/logo.png' %}",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "الصفحة الرئيسية",
+      "short_name": "الرئيسية",
+      "url": "/patients/dashboard/",
+      "icons": [{ "src": "{% static 'patients/images/logo.png' %}", "sizes": "192x192" }]
+    },
+    {
+      "name": "قائمة المرضى",
+      "short_name": "المرضى",
+      "url": "/patients/",
+      "icons": [{ "src": "{% static 'patients/images/logo.png' %}", "sizes": "192x192" }]
+    },
+    {
+      "name": "إضافة مريض",
+      "short_name": "إضافة",
+      "url": "/patients/add/",
+      "icons": [{ "src": "{% static 'patients/images/logo.png' %}", "sizes": "192x192" }]
+    }
+  ]
+}

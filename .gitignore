@@ -1,5 +1,55 @@
+# ── Django / Python ────────────────────────────────────────────────────
 db.sqlite3
 .env
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 staticfiles/
+media/visit_images/
+
+# ── Node / npm ─────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Capacitor / web build ──────────────────────────────────────────────
+# www/ is the placeholder webDir; only index.html should be tracked.
+www/*
+!www/index.html
+
+# ── Android (Capacitor) ────────────────────────────────────────────────
+# Keep the source tree, ignore all build / IDE / cache output.
+android/build/
+android/app/build/
+android/app/release/
+android/.gradle/
+android/.idea/
+android/local.properties
+android/captures/
+android/app/google-services.json
+*.apk
+*.aab
+*.iml
+
+# ── iOS (Capacitor) — for when you build on a Mac later ────────────────
+ios/App/Pods/
+ios/App/build/
+ios/App/Podfile.lock
+ios/DerivedData/
+ios/.xcode.env.local
+*.ipa
+*.dSYM.zip
+
+# ── IDE / OS noise ─────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# ── Claude Code workspace state ────────────────────────────────────────
+# .claude/ holds agent worktrees, session data, and skill caches — never
+# committed; regenerated automatically by the tool.
+.claude/

@@ -1,0 +1,21 @@
+{% comment %}
+   ----------------------------------------------------------------------------
+   Vitals grid — renders the small "ضغط/نبض/الحرارة/..." boxes for a visit.
+
+   Required context:
+     visit  — the Visit instance, with `present_vitals` attached by the view.
+              `present_vitals` is a list of {'name','label','value'} dicts,
+              already filtered to fields that are non-empty AND allowed for
+              the clinic's specialty.
+   ---------------------------------------------------------------------------
+{% endcomment %}
+{% if visit.present_vitals %}
+<div class="vitals-grid">
+    {% for f in visit.present_vitals %}
+    <div class="vital-box">
+        <div class="vital-label">{{ f.label }}</div>
+        <div class="vital-value">{{ f.value }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

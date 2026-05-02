@@ -1,20 +1,29 @@
 {% extends 'patients/base.html' %}
+{% load patient_extras %}
 
 {% block title %}تعديل الزيارة التمريضية{% endblock %}
 
 {% block content %}
 
+{% if is_nurse_view %}{% include 'patients/_quick_chips_assets.html' %}{% endif %}
 
 <div class="patient-view-wrapper">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-        <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تعديل الزيارة التمريضية للمريض: {{ visit.patient.name }}</h1>
+        <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;"><i class="fa-solid fa-pen-to-square"></i> تعديل الزيارة التمريضية للمريض: {{ visit.patient.name }}</h1>
     </div>
 
     <div class="ui-form-card">
-        <form method="post">
+        <form method="post" data-offline data-offline-key="nurse_edit_visit_{{ visit.id }}">
             {% csrf_token %}
+            {% comment %}
+               When a doctor lands here from the complete-visit screen, this
+               hidden field carries them back to it on save.
+            {% endcomment %}
+            {% if came_from_doctor %}
+                <input type="hidden" name="next" value="complete">
+            {% endif %}
 
-            <div class="section-title">معلومات الزيارة</div>
+            <div class="section-title"><i class="fa-solid fa-clipboard-list"></i> معلومات الزيارة</div>
             <div class="form-grid-layout">
                 <div class="form-group">
                     <label>نوع الزيارة</label>
@@ -30,55 +39,49 @@
                 </div>
             </div>
 
-            <div class="section-title" style="margin-top: 35px;">البيانات التمريضية</div>
+            <div class="section-title" style="margin-top: 35px;"><i class="fa-solid fa-notes-medical"></i> البيانات التمريضية</div>
             <div class="form-grid-layout">
                 <div class="form-group full-width">
                     <label for="chief_complaint">الشكوى الرئيسية</label>
+                    {% if is_nurse_view %}
+                        {% include 'patients/_quick_chips.html' with field_id="chief_complaint" chips=quick_picks.chief_complaint %}
+                    {% endif %}
                     <textarea name="chief_complaint" id="chief_complaint">{{ visit.chief_complaint|default_if_none:'' }}</textarea>
                 </div>
 
                 <div class="form-group full-width">
                     <label for="nursing_notes">ملاحظات تمريضية</label>
+                    {% if is_nurse_view %}
+                        {% include 'patients/_quick_chips.html' with field_id="nursing_notes" chips=quick_picks.nursing_notes %}
+                    {% endif %}
                     <textarea name="nursing_notes" id="nursing_notes">{{ visit.nursing_notes|default_if_none:'' }}</textarea>
                 </div>
             </div>
 
-            <div class="section-title" style="margin-top: 35px;">العلامات الحيوية</div>
+            {% if vitals_specs %}
+            <div class="section-title" style="margin-top: 35px;"><i class="fa-solid fa-heart-pulse"></i> العلامات الحيوية</div>
             <div class="form-grid-layout">
-                <div class="form-group">
-                    <label for="blood_pressure">ضغط الدم</label>
-                    <input type="text" name="blood_pressure" id="blood_pressure" value="{% if visit.blood_pressure != 'None' and visit.blood_pressure != None %}{{ visit.blood_pressure }}{% endif %}">
-                </div>
-
-                <div class="form-group">
-                    <label for="pulse">النبض</label>
-                    <input type="text" name="pulse" id="pulse" value="{% if visit.pulse != 'None' and visit.pulse != None %}{{ visit.pulse }}{% endif %}">
-                </div>
-
-                <div class="form-group">
-                    <label for="temperature">الحرارة</label>
-                    <input type="text" name="temperature" id="temperature" value="{% if visit.temperature != 'None' and visit.temperature != None %}{{ visit.temperature }}{% endif %}">
-                </div>
-
-                <div class="form-group">
-                    <label for="weight">الوزن</label>
-                    <input type="text" name="weight" id="weight" value="{% if visit.weight != 'None' and visit.weight != None %}{{ visit.weight }}{% endif %}">
-                </div>
-
-                <div class="form-group">
-                    <label for="height">الطول</label>
-                    <input type="text" name="height" id="height" value="{% if visit.height != 'None' and visit.height != None %}{{ visit.height }}{% endif %}">
-                </div>
-
-                <div class="form-group">
-                    <label for="blood_sugar">سكر الدم</label>
-                    <input type="text" name="blood_sugar" id="blood_sugar" value="{% if visit.blood_sugar != 'None' and visit.blood_sugar != None %}{{ visit.blood_sugar }}{% endif %}">
-                </div>
+                {% for f in vitals_specs %}
+                    {% with val=visit|get_attr:f.name %}
+                    <div class="form-group">
+                        <label for="{{ f.name }}">{{ f.label }}</label>
+                        <input type="text" name="{{ f.name }}" id="{{ f.name }}"
+                               value="{% if val and val != 'None' %}{{ val }}{% endif %}">
+                    </div>
+                    {% endwith %}
+                {% endfor %}
             </div>
+            {% endif %}
 
             <div class="form-actions">
-                <button type="submit" class="btn-submit">حفظ التعديلات</button>
-                <a href="{% url 'patient_detail' visit.patient.id %}" class="btn-cancel">إلغاء</a>
+                <button type="submit" class="btn-submit">
+                    {% if came_from_doctor %}<i class="fa-solid fa-arrow-right-long"></i> حفظ ومتابعة الإكمال{% else %}<i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات{% endif %}
+                </button>
+                {% if came_from_doctor %}
+                    <a href="{% url 'doctor_complete_visit' visit.id %}" class="btn-cancel"><i class="fa-solid fa-xmark"></i> إلغاء</a>
+                {% else %}
+                    <a href="{% url 'patient_detail' visit.patient.id %}" class="btn-cancel"><i class="fa-solid fa-xmark"></i> إلغاء</a>
+                {% endif %}
             </div>
         </form>
     </div>

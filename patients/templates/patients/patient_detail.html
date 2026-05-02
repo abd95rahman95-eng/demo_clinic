@@ -1,4 +1,5 @@
 {% extends 'patients/base.html' %}
+{% load patient_extras %}
 
 {% block title %}تفاصيل المريض{% endblock %}
 
@@ -173,6 +174,34 @@
     border-radius: 10px; padding: 30px; text-align: center;
     color: #5a8a6a; margin-bottom: 25px;
 }
+
+/* Attachments grid (visit images) */
+.visit-attachments-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    margin-top: 8px;
+}
+.attachment-thumb {
+    border: 1px solid #d0e4d5;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f8fbf9;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.attachment-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.attachments-title {
+    background: #fdf6e3; color: #7a5c00;
+    border-right: 3px solid #d4a017;
+}
 </style>
 
 <div class="patient-view-wrapper">
@@ -190,15 +219,15 @@
     </button>
 </div>
 {% endif %}
-<div class="section-title">👤 بيانات المريض</div>
+<div class="section-title"><i class="fa-solid fa-user"></i> بيانات المريض</div>
 <div class="ui-patient-card">
     <h2>
         <span>{{ patient.name }}</span>
         <div style="display: flex; gap: 10px;">
             <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">➕ إضافة زيارة تمريضية جديدة</a>
-            <a href="{% url 'edit_patient' patient.id %}" class="btn-action btn-edit">✏️ تعديل</a>
+            <a href="{% url 'edit_patient' patient.id %}" class="btn-action btn-edit"><i class="fa-solid fa-pen-to-square"></i> تعديل</a>
             {% if is_doctor %}
-                <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_patient' patient.id %}', 'حذف المريض', '{{ patient.name|escapejs }}')">🗑️ حذف</button>
+                <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_patient' patient.id %}', 'حذف المريض', '{{ patient.name|escapejs }}')"><i class="fa-solid fa-trash"></i> حذف</button>
             {% endif %}
         </div>
     </h2>
@@ -251,26 +280,22 @@
         </div>
         <div class="ui-visit-body">
             <div class="ui-subsection">
-                <div class="ui-sub-title nursing-title">🩺 القسم التمريضي</div>
-                {% if pending_visit.chief_complaint %}
-                <div class="field-row">
-                    <span class="field-label">الشكوى الرئيسية:</span>
-                    <span class="field-value">{{ pending_visit.chief_complaint }}</span>
-                </div>
-                {% endif %}
-                {% if pending_visit.blood_pressure or pending_visit.pulse or pending_visit.temperature or pending_visit.weight or pending_visit.height or pending_visit.blood_sugar %}
-            <div class="vitals-grid">
-                {% if pending_visit.blood_pressure %}<div class="vital-box"><div class="vital-label">ضغط الدم</div><div class="vital-value">{{ pending_visit.blood_pressure }}</div></div>{% endif %}
-                {% if pending_visit.pulse %}<div class="vital-box"><div class="vital-label">النبض</div><div class="vital-value">{{ pending_visit.pulse }}</div></div>{% endif %}
-                {% if pending_visit.temperature %}<div class="vital-box"><div class="vital-label">الحرارة</div><div class="vital-value">{{ pending_visit.temperature }}</div></div>{% endif %}
-                {% if pending_visit.weight %}<div class="vital-box"><div class="vital-label">الوزن</div><div class="vital-value">{{ pending_visit.weight }}</div></div>{% endif %}
-                {% if pending_visit.height %}<div class="vital-box"><div class="vital-label">الطول</div><div class="vital-value">{{ pending_visit.height }}</div></div>{% endif %}
-                {% if pending_visit.blood_sugar %}<div class="vital-box"><div class="vital-label">سكر الدم</div><div class="vital-value">{{ pending_visit.blood_sugar }}</div></div>{% endif %}
-            </div>
-            {% endif %}
+                <div class="ui-sub-title nursing-title"><i class="fa-solid fa-user-nurse"></i> القسم التمريضي</div>
+                {% for f in nursing_text_specs %}
+                    {% with val=pending_visit|get_attr:f.name %}
+                        {% if val %}
+                        <div class="field-row">
+                            <span class="field-label">{{ f.label }}:</span>
+                            <span class="field-value">{{ val }}</span>
+                        </div>
+                        {% endif %}
+                    {% endwith %}
+                {% endfor %}
+
+                {% include 'patients/_vitals_grid.html' with visit=pending_visit %}
             </div>
             <div class="ui-actions-bar">
-                <a href="{% url 'nurse_edit_visit' pending_visit.id %}" class="btn-action btn-edit">✏️ تعديل الزيارة</a>
+                <a href="{% url 'nurse_edit_visit' pending_visit.id %}" class="btn-action btn-edit"><i class="fa-solid fa-pen-to-square"></i> تعديل الزيارة</a>
             </div>
         </div>
     </div>
@@ -292,24 +317,19 @@
     </div>
     <div class="ui-visit-body">
         <div class="ui-subsection">
-            <div class="ui-sub-title nursing-title">🩺 القسم التمريضي المبدئي</div>
-            {% if pending_visit.chief_complaint %}
-                <div class="field-row"><span class="field-label">الشكوى الرئيسية:</span><span class="field-value">{{ pending_visit.chief_complaint }}</span></div>
-            {% endif %}
-            {% if pending_visit.nursing_notes %}
-                <div class="field-row"><span class="field-label">ملاحظات تمريضية:</span><span class="field-value">{{ pending_visit.nursing_notes }}</span></div>
-            {% endif %}
-            
-            {% if pending_visit.blood_pressure or pending_visit.pulse or pending_visit.temperature or pending_visit.weight or pending_visit.height or pending_visit.blood_sugar %}
-            <div class="vitals-grid">
-                {% if pending_visit.blood_pressure %}<div class="vital-box"><div class="vital-label">ضغط الدم</div><div class="vital-value">{{ pending_visit.blood_pressure }}</div></div>{% endif %}
-                {% if pending_visit.pulse %}<div class="vital-box"><div class="vital-label">النبض</div><div class="vital-value">{{ pending_visit.pulse }}</div></div>{% endif %}
-                {% if pending_visit.temperature %}<div class="vital-box"><div class="vital-label">الحرارة</div><div class="vital-value">{{ pending_visit.temperature }}</div></div>{% endif %}
-                {% if pending_visit.weight %}<div class="vital-box"><div class="vital-label">الوزن</div><div class="vital-value">{{ pending_visit.weight }}</div></div>{% endif %}
-                {% if pending_visit.height %}<div class="vital-box"><div class="vital-label">الطول</div><div class="vital-value">{{ pending_visit.height }}</div></div>{% endif %}
-                {% if pending_visit.blood_sugar %}<div class="vital-box"><div class="vital-label">سكر الدم</div><div class="vital-value">{{ pending_visit.blood_sugar }}</div></div>{% endif %}
-            </div>
-            {% endif %}
+            <div class="ui-sub-title nursing-title"><i class="fa-solid fa-user-nurse"></i> القسم التمريضي المبدئي</div>
+            {% for f in nursing_text_specs %}
+                {% with val=pending_visit|get_attr:f.name %}
+                    {% if val %}
+                    <div class="field-row">
+                        <span class="field-label">{{ f.label }}:</span>
+                        <span class="field-value">{{ val }}</span>
+                    </div>
+                    {% endif %}
+                {% endwith %}
+            {% endfor %}
+
+            {% include 'patients/_vitals_grid.html' with visit=pending_visit specs=vitals_specs %}
         </div>
         <div class="ui-actions-bar">
             <a href="{% url 'doctor_complete_visit' pending_visit.id %}" class="btn-action btn-complete">إكمال الزيارة الطبية</a>
@@ -340,77 +360,61 @@
         </div>
         <div class="ui-visit-body">
             <div class="ui-subsection">
-                <div class="ui-sub-title nursing-title">🩺 القسم التمريضي</div>
-                {% if visit.chief_complaint %}<div class="field-row"><span class="field-label">الشكوى الرئيسية:</span><span class="field-value">{{ visit.chief_complaint }}</span></div>{% endif %}
-                {% if visit.nursing_notes %}<div class="field-row"><span class="field-label">ملاحظات تمريضية:</span><span class="field-value">{{ visit.nursing_notes }}</span></div>{% endif %}
-                
-                {% if visit.blood_pressure or visit.pulse or visit.temperature or visit.weight or visit.height or visit.blood_sugar %}
-                <div class="vitals-grid">
-                    {% if visit.blood_pressure %}<div class="vital-box"><div class="vital-label">ضغط الدم</div><div class="vital-value">{{ visit.blood_pressure }}</div></div>{% endif %}
-                    {% if visit.pulse %}<div class="vital-box"><div class="vital-label">النبض</div><div class="vital-value">{{ visit.pulse }}</div></div>{% endif %}
-                    {% if visit.temperature %}<div class="vital-box"><div class="vital-label">الحرارة</div><div class="vital-value">{{ visit.temperature }}</div></div>{% endif %}
-                    {% if visit.weight %}<div class="vital-box"><div class="vital-label">الوزن</div><div class="vital-value">{{ visit.weight }}</div></div>{% endif %}
-                    {% if visit.height %}<div class="vital-box"><div class="vital-label">الطول</div><div class="vital-value">{{ visit.height }}</div></div>{% endif %}
-                    {% if visit.blood_sugar %}<div class="vital-box"><div class="vital-label">سكر الدم</div><div class="vital-value">{{ visit.blood_sugar }}</div></div>{% endif %}
+                <div class="ui-sub-title nursing-title"><i class="fa-solid fa-user-nurse"></i> القسم التمريضي</div>
+                {% for f in nursing_text_specs %}
+                    {% with val=visit|get_attr:f.name %}
+                        {% if val %}
+                        <div class="field-row">
+                            <span class="field-label">{{ f.label }}:</span>
+                            <span class="field-value">{{ val }}</span>
+                        </div>
+                        {% endif %}
+                    {% endwith %}
+                {% endfor %}
+
+                {% include 'patients/_vitals_grid.html' with visit=visit %}
+            </div>
+            <div class="ui-subsection">
+                <div class="ui-sub-title medical-title"><i class="fa-solid fa-user-doctor"></i> القسم الطبي</div>
+                {% for f in medical_specs %}
+                    {% with val=visit|get_attr:f.name %}
+                        {% if val %}
+                        <div class="field-row {{ f.cls }}">
+                            <span class="field-label">{{ f.label }}:</span>
+                            <span class="field-value">{% if f.name == 'follow_up_date' %}{{ val|date:"Y-m-d H:i" }}{% else %}{{ val }}{% endif %}</span>
+                        </div>
+                        {% endif %}
+                    {% endwith %}
+                {% endfor %}
+            </div>
+            {% if visit.attachments.all %}
+            <div class="ui-subsection">
+                <div class="ui-sub-title attachments-title"><i class="fa-solid fa-paperclip"></i> المرفقات</div>
+                <div class="visit-attachments-grid">
+                    {% for att in visit.attachments.all %}
+                    <div class="attachment-thumb">
+                        <a href="{{ att.image.url }}" target="_blank" rel="noopener">
+                            <img src="{{ att.image.url }}" alt="مرفق">
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% if visit.ai_suggestions %}
+            <div class="ui-subsection">
+                <div class="ui-sub-title medical-title"><i class="fa-solid fa-robot"></i> اقتراحات المساعد الذكي</div>
+                <div class="readonly-field" style="white-space: pre-wrap; background:#f7faff; border:1px dashed #c7d8f0; padding:10px 12px; border-radius:8px;">{{ visit.ai_suggestions }}</div>
+                {% if visit.ai_generated_at %}
+                <div style="margin-top:6px; font-size:12px; color:#5a6a7a;">
+                    <i class="fa-solid fa-floppy-disk"></i> تم التوليد: {{ visit.ai_generated_at|date:"Y-m-d H:i" }}
                 </div>
                 {% endif %}
             </div>
-            <div class="ui-subsection">
-                <div class="ui-sub-title medical-title">⚕️ القسم الطبي</div>
-                {% if visit.history_of_present_illness %}<div class="field-row"><span class="field-label">القصة المرضية الحالية:</span><span class="field-value">{{ visit.history_of_present_illness }}</span></div>{% endif %}
-                {% if visit.clinical_examination %}<div class="field-row"><span class="field-label">الفحص السريري:</span><span class="field-value">{{ visit.clinical_examination }}</span></div>{% endif %}
-
-                {% if patient.clinic.specialty == 'cardiology' %}
-                {% if visit.ecg_results %}<div class="field-row"><span class="field-label">نتائج تخطيط القلب:</span><span class="field-value">{{ visit.ecg_results }}</span></div>{% endif %}
-                {% if visit.ejection_fraction %}<div class="field-row"><span class="field-label">الكسر القذفي:</span><span class="field-value">{{ visit.ejection_fraction }}</span></div>{% endif %}
-                {% if visit.cardiac_history %}<div class="field-row"><span class="field-label">تاريخ أمراض القلب:</span><span class="field-value">{{ visit.cardiac_history }}</span></div>{% endif %}
-                {% if visit.chest_pain_type %}<div class="field-row"><span class="field-label">نوع ألم الصدر:</span><span class="field-value">{{ visit.chest_pain_type }}</span></div>{% endif %}
-                {% if visit.cardiac_medications %}<div class="field-row"><span class="field-label">أدوية القلب:</span><span class="field-value">{{ visit.cardiac_medications }}</span></div>{% endif %}
-                {% endif %}
-
-                {% if patient.clinic.specialty == 'neurology' %}
-                {% if visit.CT_MRI_findings %}<div class="field-row"><span class="field-label">نتائج الأشعة المقطعية والرنين المغناطيسي:</span><span class="field-value">{{ visit.CT_MRI_findings }}</span></div>{% endif %}
-                {% if visit.neurological_examination %}<div class="field-row"><span class="field-label">الفحص العصبي:</span><span class="field-value">{{ visit.neurological_examination }}</span></div>{% endif %}
-                {% endif %}
-
-                {% if patient.clinic.specialty == 'dermatology' %}
-                {% if visit.skin_examination %}<div class="field-row"><span class="field-label">فحص الجلد:</span><span class="field-value">{{ visit.skin_examination }}</span></div>{% endif %}
-                {% endif %}
-
-                {% if patient.clinic.specialty == 'orthopedics' %}
-                {% if visit.pain_location %}<div class="field-row"><span class="field-label">موقع الألم:</span><span class="field-value">{{ visit.pain_location }}</span></div>{% endif %}
-                {% if visit.pain_scale %}<div class="field-row"><span class="field-label">مقياس الألم:</span><span class="field-value">{{ visit.pain_scale }}</span></div>{% endif %}
-                {% if visit.injury_history %}<div class="field-row"><span class="field-label">تاريخ الإصابة:</span><span class="field-value">{{ visit.injury_history }}</span></div>{% endif %}
-                {% if visit.range_of_motion %}<div class="field-row"><span class="field-label">مدى الحركة:</span><span class="field-value">{{ visit.range_of_motion }}</span></div>{% endif %}
-                {% if visit.xray_findings %}<div class="field-row"><span class="field-label">نتائج الأشعة:</span><span class="field-value">{{ visit.xray_findings }}</span></div>{% endif %}
-                {% endif %}
-
-                {% if patient.clinic.specialty == 'gynecology' %}
-                {% if visit.last_menstrual_period %}<div class="field-row"><span class="field-label">آخر دورة شهرية:</span><span class="field-value">{{ visit.last_menstrual_period }}</span></div>{% endif %}
-                {% if visit.cycle_regularity %}<div class="field-row"><span class="field-label">انتظام الدورة:</span><span class="field-value">{{ visit.cycle_regularity }}</span></div>{% endif %}
-                {% if visit.contraception_method %}<div class="field-row"><span class="field-label">وسيلة منع الحمل:</span><span class="field-value">{{ visit.contraception_method }}</span></div>{% endif %}
-                {% if visit.obstetric_history %}<div class="field-row"><span class="field-label">تاريخ الولادة:</span><span class="field-value">{{ visit.obstetric_history }}</span></div>{% endif %}
-                <div class="ui-sub-title" style="color: #6c757d; background: #f8f9fa; border-right: 3px solid #6c757d; margin-top: 15px; margin-bottom: 10px;">متابعة الحمل</div>
-                {% if visit.gestational_age_weeks %}<div class="field-row"><span class="field-label">عمر الحمل بالأسابيع:</span><span class="field-value">{{ visit.gestational_age_weeks }}</span></div>{% endif %}
-                {% if visit.fundal_height %}<div class="field-row"><span class="field-label">ارتفاع قاع الرحم:</span><span class="field-value">{{ visit.fundal_height }}</span></div>{% endif %}
-                {% if visit.abdominal_circumference %}<div class="field-row"><span class="field-label">محيط البطن:</span><span class="field-value">{{ visit.abdominal_circumference }}</span></div>{% endif %}
-                {% if visit.fetal_heart_rate %}<div class="field-row"><span class="field-label">معدل ضربات قلب الجنين:</span><span class="field-value">{{ visit.fetal_heart_rate }}</span></div>{% endif %}
-                {% if visit.fetal_movement %}<div class="field-row"><span class="field-label">حركة الجنين:</span><span class="field-value">{{ visit.fetal_movement }}</span></div>{% endif %}
-                {% if visit.fetal_position %}<div class="field-row"><span class="field-label">وضع الجنين:</span><span class="field-value">{{ visit.fetal_position }}</span></div>{% endif %}
-                {% if visit.ultrasound_notes %}<div class="field-row"><span class="field-label">ملاحظات الموجات فوق الصوتية:</span><span class="field-value">{{ visit.ultrasound_notes }}</span></div>{% endif %}
-                {% endif %}
-                {% if visit.diagnosis %}<div class="field-row highlight"><span class="field-label">التشخيص:</span><span class="field-value">{{ visit.diagnosis }}</span></div>{% endif %}
-                {% if visit.treatment_plan %}<div class="field-row"><span class="field-label">الخطة العلاجية:</span><span class="field-value">{{ visit.treatment_plan }}</span></div>{% endif %}
-                {% if visit.prescription %}<div class="field-row"><span class="field-label">الوصفة الطبية:</span><span class="field-value">{{ visit.prescription }}</span></div>{% endif %}
-                {% if visit.lab_requests %}<div class="field-row"><span class="field-label">طلبات التحاليل:</span><span class="field-value">{{ visit.lab_requests }}</span></div>{% endif %}
-                {% if visit.imaging_requests %}<div class="field-row"><span class="field-label">طلبات الصور:</span><span class="field-value">{{ visit.imaging_requests }}</span></div>{% endif %}
-                {% if visit.patient_instructions %}<div class="field-row"><span class="field-label">تعليمات للمريض:</span><span class="field-value">{{ visit.patient_instructions }}</span></div>{% endif %}
-                {% if visit.follow_up_date %}<div class="field-row followup"><span class="field-label">موعد المراجعة القادم:</span><span class="field-value">{{ visit.follow_up_date }}</span></div>{% endif %}
-                {% if visit.doctor_notes %}<div class="field-row"><span class="field-label">ملاحظات الطبيب:</span><span class="field-value">{{ visit.doctor_notes }}</span></div>{% endif %}
-            </div>
+            {% endif %}
             <div class="ui-actions-bar">
-                <a href="{% url 'edit_visit' visit.id %}" class="btn-action btn-edit">✏️ تعديل الزيارة</a>
-                <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_visit' visit.id %}', 'حذف الزيارة', '{{ visit.get_visit_type_display|escapejs }}')">🗑️ حذف الزيارة</button>
+                <a href="{% url 'edit_visit' visit.id %}" class="btn-action btn-edit"><i class="fa-solid fa-pen-to-square"></i> تعديل الزيارة</a>
+                <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_visit' visit.id %}', 'حذف الزيارة', '{{ visit.get_visit_type_display|escapejs }}')"><i class="fa-solid fa-trash"></i> حذف الزيارة</button>
             </div>
         </div>
     </div>
@@ -427,286 +431,74 @@
 </div> <!-- end patient-view-wrapper -->
 
 <!-- ═══════════════════════════════════════════
-     HIDDEN DATA STORE — read by printReport()
+     PRINT REPORT — server-rendered hidden block
+     The print button just opens this same HTML
+     in a new window. One source of truth with
+     the on-screen view (both loop the manifest).
      ═══════════════════════════════════════════ -->
-<div id="print-report" style="display:none;">
-
-    <div id="rpt-patient"
-         data-name="{{ patient.name }}"
-         data-file="{{ patient.file_number }}"
-         data-age="{{ patient.age }}"
-         data-phone="{{ patient.phone }}"
-         data-address="{{ patient.address }}"
-         data-clinic="عيادة: {{ clinic_name }}"
-         data-doctor="{{ request.user.first_name }} {{ request.user.last_name }}">
-    </div>
-
-    {% for visit in visits %}
-    <div class="rpt-visit"
-         data-number="{{ forloop.counter }}"
-         data-type="{{ visit.get_visit_type_display }}"
-         data-date="{{ visit.created_at }}"
-         data-chief-complaint="{{ visit.chief_complaint }}"
-         data-nursing-notes="{{ visit.nursing_notes }}"
-         data-blood-pressure="{{ visit.blood_pressure }}"
-         data-pulse="{{ visit.pulse }}"
-         data-temperature="{{ visit.temperature }}"
-         data-weight="{{ visit.weight }}"
-         data-height="{{ visit.height }}"
-         data-blood-sugar="{{ visit.blood_sugar }}"
-         data-history="{{ visit.history_of_present_illness }}"
-         data-examination="{{ visit.clinical_examination }}"
-         data-ecg_results="{{ visit.ecg_results }}"
-         data-ejection_fraction="{{ visit.ejection_fraction }}"
-         data-cardiac_history="{{ visit.cardiac_history }}"
-         data-chest_pain_type="{{ visit.chest_pain_type }}"
-         data-cardiac_medications="{{ visit.cardiac_medications }}"
-         data-pain_location="{{ visit.pain_location }}"
-         data-pain_scale="{{ visit.pain_scale }}"
-         data-injury_history="{{ visit.injury_history }}"
-         data-range_of_motion="{{ visit.range_of_motion }}"
-         data-xray_findings="{{ visit.xray_findings }}"
-         data-cycle_regularity="{{ visit.cycle_regularity }}"
-         data-contraception_method="{{ visit.contraception_method }}"
-         data-obstetric_history="{{ visit.obstetric_history }}"
-         data-fundal_height="{{ visit.fundal_height }}"
-         data-abdominal_circumference="{{ visit.abdominal_circumference }}"
-         data-fetal_heart_rate="{{ visit.fetal_heart_rate }}"
-         data-fetal_movement="{{ visit.fetal_movement }}"
-         data-fetal_position="{{ visit.fetal_position }}"
-         data-ultrasound_notes="{{ visit.ultrasound_notes }}"
-         data-diagnosis="{{ visit.diagnosis }}"
-         data-treatment="{{ visit.treatment_plan }}"
-         data-prescription="{{ visit.prescription }}"
-         data-lab="{{ visit.lab_requests }}"
-         data-imaging="{{ visit.imaging_requests }}"
-         data-instructions="{{ visit.patient_instructions }}"
-         data-doctor-notes="{{ visit.doctor_notes }}"
-         data-ct_mri_findings="{{ visit.CT_MRI_findings }}"
-         data-neurological_examination="{{ visit.neurological_examination }}"
-         data-skin_examination="{{ visit.skin_examination }}">
-    </div>
-    {% endfor %}
-
-</div>
-
-
-<script>
-function printReport() {
-
-    /* ── Patient data ── */
-    const p = document.getElementById('rpt-patient').dataset;
-
-    /* ── Visits ── */
-    const visitEls = document.querySelectorAll('.rpt-visit');
-    let visitsHTML = '';
-
-    visitEls.forEach(el => {
-        const d = el.dataset;
-
-        const vitals = [
-            { label: 'ضغط الدم',  value: d.bloodPressure },
-            { label: 'النبض',      value: d.pulse },
-            { label: 'الحرارة',   value: d.temperature },
-            { label: 'الوزن',     value: d.weight },
-            { label: 'الطول',     value: d.height },
-            { label: 'سكر الدم',  value: d.bloodSugar },
-        ].filter(v => v.value);
-
-        const vitalsHTML = vitals.length ? `
-            <div class="vitals-grid">
-                ${vitals.map(v => `
-                    <div class="vital-box">
-                        <div class="vital-label">${v.label}</div>
-                        <div class="vital-value">${v.value}</div>
-                    </div>`).join('')}
-            </div>` : '';
-
-        const nursingFields = [
-            { label: 'الشكوى الرئيسية', value: d.chiefComplaint },
-            { label: 'ملاحظات تمريضية', value: d.nursingNotes },
-        ].filter(f => f.value);
-
-        const nursingHTML = nursingFields.map(f => `
-            <div class="field-row">
-                <span class="field-label">${f.label}:</span>
-                <span class="field-value">${f.value}</span>
-            </div>`).join('');
-
-        const medFields = [
-            { label: 'القصة المرضية الحالية', value: d.history,      cls: '' },
-            { label: 'الفحص السريري',          value: d.examination,  cls: '' },
-            { label: 'نتائج تخطيط القلب', value: d.ecg_results, cls: '' },
-            { label: 'الكسر القذفي', value: d.ejection_fraction, cls: '' },
-            { label: 'تاريخ أمراض القلب', value: d.cardiac_history, cls: '' },
-            { label: 'نوع ألم الصدر', value: d.chest_pain_type, cls: '' },
-            { label: 'أدوية القلب', value: d.cardiac_medications, cls: '' },
-            { label: 'موقع الألم', value: d.pain_location, cls: '' },
-            { label: 'مقياس الألم', value: d.pain_scale, cls: '' },
-            { label: 'تاريخ الإصابة', value: d.injury_history, cls: '' },
-            { label: 'مدى الحركة', value: d.range_of_motion, cls: '' },
-            { label: 'نتائج الأشعة', value: d.xray_findings, cls: '' },
-            { label: 'آخر دورة شهرية', value: d.last_menstrual_period, cls: '' },
-            { label: 'انتظام الدورة', value: d.cycle_regularity, cls: '' },
-            { label: 'وسيلة منع الحمل', value: d.contraception_method, cls: '' },
-            { label: 'تاريخ الولادة', value: d.obstetric_history, cls: '' },
-            { label: 'عمر الحمل بالأسابيع', value: d.gestational_age_weeks, cls: '' },
-            { label: 'ارتفاع قاع الرحم', value: d.fundal_height, cls: '' },
-            { label: 'محيط البطن', value: d.abdominal_circumference, cls: '' },
-            { label: 'معدل ضربات قلب الجنين', value: d.fetal_heart_rate, cls: '' },
-            { label: 'حركة الجنين', value: d.fetal_movement, cls: '' },
-            { label: 'وضع الجنين', value: d.fetal_position, cls: '' },
-            { label: 'ملاحظات الموجات فوق الصوتية', value: d.ultrasound_notes, cls: '' },
-            { label: 'التشخيص',                value: d.diagnosis,    cls: 'highlight' },
-            { label: 'الخطة العلاجية',          value: d.treatment,    cls: '' },
-            { label: 'الوصفة الطبية',           value: d.prescription, cls: '' },
-            { label: 'طلبات التحاليل',          value: d.lab,          cls: '' },
-            { label: 'طلبات الصور',             value: d.imaging,      cls: '' },
-            { label: 'تعليمات للمريض',          value: d.instructions, cls: '' },
-            { label: 'موعد المراجعة القادم',    value: d.followup,     cls: 'followup' },
-            { label: 'ملاحظات الطبيب',          value: d.doctorNotes,  cls: '' },
-            { label: 'نتائج الأشعة المقطعية والرنين المغناطيسي', value: d.CT_MRI_findings, cls: '' },
-            { label: 'الفحص العصبي', value: d.neurological_examination, cls: '' },
-            { label: 'فحص الجلد', value: d.skin_examination, cls: '' },
-        ].filter(f => f.value);
-
-        const medHTML = medFields.map(f => `
-            <div class="field-row ${f.cls}">
-                <span class="field-label">${f.label}:</span>
-                <span class="field-value">${f.value}</span>
-            </div>`).join('');
-
-        visitsHTML += `
-        <div class="visit-card">
-            <div class="visit-header">
-                <span class="visit-badge">زيارة ${d.number}</span>
-                <span class="visit-type">${d.type}</span>
-                <span class="visit-date">${d.date}</span>
-            </div>
-            <div class="visit-body">
-                <div class="subsection">
-                    <div class="sub-title nursing-title">🩺 القسم التمريضي</div>
-                    ${nursingHTML || '<p class="empty">لا توجد بيانات تمريضية</p>'}
-                    ${vitalsHTML}
-                </div>
-                <div class="subsection">
-                    <div class="sub-title medical-title">⚕️ القسم الطبي</div>
-                    ${medHTML || '<p class="empty">لا توجد بيانات طبية</p>'}
-                </div>
-            </div>
-        </div>`;
-    });
-
-    const today = new Date().toLocaleDateString('ar-SA', {
-        year: 'numeric', month: 'long', day: 'numeric'
-    });
-
-    const html = `<!DOCTYPE html>
+{% if is_doctor %}
+<script type="text/template" id="print-template">
+<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="UTF-8">
-<title>تقرير طبي — ${p.name}</title>
+<title>تقرير طبي — {{ patient.name }}</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-
 body {
     font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-    direction: rtl;
-    background: #f0f4f1;
-    color: #1a1a2e;
-    font-size: 13px;
-    line-height: 1.6;
+    direction: rtl; background: #f0f4f1; color: #1a1a2e;
+    font-size: 13px; line-height: 1.6;
 }
-
 .page {
-    max-width: 900px;
-    margin: 0 auto;
-    background: white;
-    min-height: 100vh;
-    box-shadow: 0 0 40px rgba(0,0,0,0.12);
+    max-width: 900px; margin: 0 auto; background: white;
+    min-height: 100vh; box-shadow: 0 0 40px rgba(0,0,0,0.12);
 }
-
-/* Header */
 .report-header {
     background: linear-gradient(135deg, #1a6b3c 0%, #0d3d22 100%);
-    color: white;
-    padding: 28px 40px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    color: white; padding: 28px 40px;
+    display: flex; justify-content: space-between; align-items: center;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-
 .header-left { display:flex; align-items:center; gap:16px; }
-
 .logo-circle {
-    width: 62px; height: 62px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.15);
-    border: 2px solid rgba(255,255,255,0.4);
+    width: 62px; height: 62px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.4);
     display: flex; align-items: center; justify-content: center;
     font-size: 28px; flex-shrink: 0;
 }
-
 .clinic-name { font-size: 21px; font-weight: 800; }
 .doctor-name  { font-size: 13px; opacity: 0.8; margin-top: 4px; }
 .header-right { text-align: left; }
 .report-title { font-size: 27px; font-weight: 800; letter-spacing: 1px; }
 .report-date  { font-size: 11px; opacity: 0.7; margin-top: 4px; }
-
-/* Gold bar */
 .accent-bar {
     height: 6px;
     background: linear-gradient(90deg, #f0a500, #ffe082, #1a6b3c);
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-
-/* Content */
 .content { padding: 28px 40px; }
-
 .section-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: #1a6b3c;
-    border-right: 5px solid #1a6b3c;
-    padding-right: 12px;
-    margin-bottom: 14px;
-    margin-top: 26px;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    font-size: 15px; font-weight: 700; color: #1a6b3c;
+    border-right: 5px solid #1a6b3c; padding-right: 12px;
+    margin-bottom: 14px; margin-top: 26px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 .section-title:first-child { margin-top: 0; }
-
-/* Patient card */
 .patient-card {
     background: linear-gradient(135deg, #f5faf6, #eaf4ec);
-    border: 1px solid #c5deca;
-    border-radius: 10px;
-    padding: 20px 24px;
-    margin-bottom: 26px;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    border: 1px solid #c5deca; border-radius: 10px;
+    padding: 20px 24px; margin-bottom: 26px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-
 .patient-card h2 {
-    font-size: 20px; color: #1a3d28;
-    margin-bottom: 14px; padding-bottom: 10px;
-    border-bottom: 2px dashed #b0d8b8;
+    font-size: 20px; color: #1a3d28; margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 2px dashed #b0d8b8;
 }
-
-.patient-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-}
-
+.patient-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .patient-field {
-    background: white;
-    border: 1px solid #d4e8d8;
-    border-radius: 7px;
-    padding: 10px 14px;
+    background: white; border: 1px solid #d4e8d8;
+    border-radius: 7px; padding: 10px 14px;
 }
 .patient-field.wide { grid-column: span 3; }
 .patient-field .lbl {
@@ -714,137 +506,79 @@ body {
     text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px;
 }
 .patient-field .val { font-size: 14px; font-weight: 600; color: #1a1a2e; }
-
-/* Visit card */
 .visit-card {
-    border: 1px solid #d0e4d5;
-    border-radius: 10px;
-    overflow: hidden;
-    margin-bottom: 20px;
-    page-break-inside: avoid;
+    border: 1px solid #d0e4d5; border-radius: 10px;
+    overflow: hidden; margin-bottom: 20px; page-break-inside: avoid;
     box-shadow: 0 2px 10px rgba(26,107,60,0.08);
 }
-
 .visit-header {
     background: linear-gradient(135deg, #1a6b3c, #2e8b57);
-    color: white;
-    padding: 11px 20px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    color: white; padding: 11px 20px;
+    display: flex; align-items: center; gap: 14px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-
 .visit-badge {
-    background: rgba(255,255,255,0.22);
-    border: 1px solid rgba(255,255,255,0.45);
+    background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.45);
     font-size: 11px; font-weight: 700;
     padding: 3px 12px; border-radius: 20px;
 }
-
 .visit-type { font-size: 14px; font-weight: 600; flex: 1; }
 .visit-date { font-size: 11px; opacity: 0.72; }
-
 .visit-body { background: white; }
-
-.subsection {
-    padding: 14px 20px;
-    border-bottom: 1px solid #eef4ef;
-}
+.subsection { padding: 14px 20px; border-bottom: 1px solid #eef4ef; }
 .subsection:last-child { border-bottom: none; }
-
 .sub-title {
     font-size: 12px; font-weight: 700;
     padding: 4px 12px; border-radius: 5px;
     display: inline-block; margin-bottom: 10px;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-
-.nursing-title {
-    background: #e3f2e8; color: #1a5c32;
-    border-right: 3px solid #1a6b3c;
-}
-
-.medical-title {
-    background: #e8f0fb; color: #1a3a6b;
-    border-right: 3px solid #2a5bc4;
-}
-
-/* Vitals */
-.vitals-grid {
-    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;
-}
-
+.nursing-title { background: #e3f2e8; color: #1a5c32; border-right: 3px solid #1a6b3c; }
+.medical-title { background: #e8f0fb; color: #1a3a6b; border-right: 3px solid #2a5bc4; }
+.vitals-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .vital-box {
-    background: #f5faf6;
-    border: 1px solid #c5deca;
-    border-radius: 8px;
-    padding: 8px 14px;
-    text-align: center;
-    min-width: 88px;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    background: #f5faf6; border: 1px solid #c5deca;
+    border-radius: 8px; padding: 8px 14px;
+    text-align: center; min-width: 88px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-
 .vital-label { font-size: 10px; color: #5a8a6a; font-weight: 600; margin-bottom: 3px; }
 .vital-value { font-size: 15px; font-weight: 700; color: #1a3d28; }
-
-/* Field rows */
 .field-row {
-    display: flex; gap: 10px;
-    padding: 6px 0;
-    border-bottom: 1px dashed #e8ede9;
-    align-items: flex-start;
+    display: flex; gap: 10px; padding: 6px 0;
+    border-bottom: 1px dashed #e8ede9; align-items: flex-start;
 }
 .field-row:last-child { border-bottom: none; }
-
 .field-label {
     font-weight: 700; color: #2d5a3d;
     min-width: 155px; flex-shrink: 0; font-size: 12px;
 }
-
 .field-value { color: #1a1a2e; flex: 1; white-space: pre-wrap; font-size: 13px; }
-
 .field-row.highlight {
     background: #fffbea; border-radius: 6px;
     padding: 7px 12px; border-bottom: none; margin: 4px 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 .field-row.highlight .field-label { color: #7a5500; }
-
 .field-row.followup {
     background: #eaf4fb; border-radius: 6px;
     padding: 7px 12px; border-bottom: none; margin: 4px 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 .field-row.followup .field-label { color: #1a3a6b; }
-
 .empty { color: #bbb; font-style: italic; font-size: 12px; }
-
-/* Footer */
 .report-footer {
-    margin-top: 36px;
-    padding: 18px 40px;
-    background: #f5faf6;
-    border-top: 3px solid #1a6b3c;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    margin-top: 36px; padding: 18px 40px;
+    background: #f5faf6; border-top: 3px solid #1a6b3c;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-
 .footer-clinic { font-size: 13px; font-weight: 700; color: #1a6b3c; }
 .footer-doctor { font-size: 11px; color: #5a8a6a; margin-top: 2px; }
-
 .footer-sig { text-align: center; }
 .sig-line { width: 130px; border-bottom: 1px solid #aaa; margin: 0 auto 5px; }
 .sig-label { font-size: 11px; color: #888; }
-
 .footer-note { font-size: 11px; color: #aaa; }
-
 @media print {
     body { background: white; }
     .page { max-width: 100%; box-shadow: none; }
@@ -853,48 +587,83 @@ body {
 </head>
 <body>
 <div class="page">
-
     <div class="report-header">
         <div class="header-left">
             <div class="logo-circle">🏥</div>
             <div>
-                <div class="clinic-name">${p.clinic}</div>
-                <div class="doctor-name">د. ${p.doctor}</div>
+                <div class="clinic-name">عيادة: {{ clinic_name }}</div>
+                <div class="doctor-name">د. {{ request.user.first_name }} {{ request.user.last_name }}</div>
             </div>
         </div>
         <div class="header-right">
             <div class="report-title">تقرير طبي</div>
-            <div class="report-date">تاريخ الطباعة: ${today}</div>
+            <div class="report-date">تاريخ الطباعة: <span id="print-today"></span></div>
         </div>
     </div>
 
     <div class="accent-bar"></div>
 
     <div class="content">
-
-        <div class="section-title">👤 بيانات المريض</div>
+        <div class="section-title"><i class="fa-solid fa-user"></i> بيانات المريض</div>
         <div class="patient-card">
-            <h2>${p.name}</h2>
+            <h2>{{ patient.name }}</h2>
             <div class="patient-grid">
-                <div class="patient-field">
-                    <div class="lbl">رقم الملف</div>
-                    <div class="val">${p.file}</div>
-                </div>
-                ${p.age     ? `<div class="patient-field"><div class="lbl">العمر</div><div class="val">${p.age}</div></div>` : ''}
-                ${p.phone   ? `<div class="patient-field"><div class="lbl">الهاتف</div><div class="val">${p.phone}</div></div>` : ''}
-                ${p.gender  ? `<div class="patient-field"><div class="lbl">الجنس</div><div class="val">${p.gender}</div></div>` : ''}
-                ${p.address ? `<div class="patient-field wide"><div class="lbl">العنوان</div><div class="val">${p.address}</div></div>` : ''}
+                {% if patient.file_number %}<div class="patient-field"><div class="lbl">رقم الملف</div><div class="val">{{ patient.file_number }}</div></div>{% endif %}
+                {% if patient.age %}<div class="patient-field"><div class="lbl">العمر</div><div class="val">{{ patient.age }}</div></div>{% endif %}
+                {% if patient.phone %}<div class="patient-field"><div class="lbl">الهاتف</div><div class="val">{{ patient.phone }}</div></div>{% endif %}
+                {% if patient.gender %}<div class="patient-field"><div class="lbl">الجنس</div><div class="val">{% if patient.gender|lower == 'male' %}ذكر{% elif patient.gender|lower == 'female' %}أنثى{% else %}{{ patient.get_gender_display }}{% endif %}</div></div>{% endif %}
+                {% if patient.address %}<div class="patient-field wide"><div class="lbl">العنوان</div><div class="val">{{ patient.address }}</div></div>{% endif %}
             </div>
         </div>
 
-        ${visitsHTML ? `<div class="section-title">📋 الزيارات المكتملة</div>${visitsHTML}` : ''}
+        {% if visits %}
+        <div class="section-title">📋 الزيارات المكتملة</div>
+        {% for visit in visits %}
+        <div class="visit-card">
+            <div class="visit-header">
+                <span class="visit-badge">زيارة {{ forloop.counter }}</span>
+                <span class="visit-type">{{ visit.get_visit_type_display }}</span>
+                <span class="visit-date">{{ visit.created_at }}</span>
+            </div>
+            <div class="visit-body">
+                <div class="subsection">
+                    <div class="sub-title nursing-title"><i class="fa-solid fa-user-nurse"></i> القسم التمريضي</div>
+                    {% for f in nursing_text_specs %}
+                        {% with val=visit|get_attr:f.name %}
+                            {% if val %}
+                            <div class="field-row">
+                                <span class="field-label">{{ f.label }}:</span>
+                                <span class="field-value">{{ val }}</span>
+                            </div>
+                            {% endif %}
+                        {% endwith %}
+                    {% endfor %}
 
+                    {% include 'patients/_vitals_grid.html' with visit=visit %}
+                </div>
+                <div class="subsection">
+                    <div class="sub-title medical-title"><i class="fa-solid fa-user-doctor"></i> القسم الطبي</div>
+                    {% for f in medical_specs %}
+                        {% with val=visit|get_attr:f.name %}
+                            {% if val %}
+                            <div class="field-row {{ f.cls }}">
+                                <span class="field-label">{{ f.label }}:</span>
+                                <span class="field-value">{% if f.name == 'follow_up_date' %}{{ val|date:"Y-m-d H:i" }}{% else %}{{ val }}{% endif %}</span>
+                            </div>
+                            {% endif %}
+                        {% endwith %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
     </div>
 
     <div class="report-footer">
         <div>
-            <div class="footer-clinic">${p.clinic}</div>
-            <div class="footer-doctor">د. ${p.doctor}</div>
+            <div class="footer-clinic">عيادة: {{ clinic_name }}</div>
+            <div class="footer-doctor">د. {{ request.user.first_name }} {{ request.user.last_name }}</div>
         </div>
         <div class="footer-sig">
             <div class="sig-line"></div>
@@ -902,10 +671,22 @@ body {
         </div>
         <div class="footer-note">تقرير طبي رسمي</div>
     </div>
-
 </div>
 </body>
-</html>`;
+</html>
+</script>
+{% endif %}
+
+<script>
+function printReport() {
+    const tpl = document.getElementById('print-template');
+    if (!tpl) return;
+    let html = tpl.textContent || tpl.innerText;
+    const today = new Date().toLocaleDateString('ar-SA', {
+        year: 'numeric', month: 'long', day: 'numeric'
+    });
+    // Inject the localized "today" string into the placeholder span.
+    html = html.replace('<span id="print-today"></span>', today);
 
     const win = window.open('', '_blank', 'width=960,height=800');
     win.document.write(html);
@@ -947,7 +728,7 @@ body {
             font-size: 34px;
             margin: 0 auto 20px;
             border: 3px solid #f5d0d0;
-        ">🗑️</div>
+        "><i class="fa-solid fa-trash"></i></div>
 
         <h2 id="delete-modal-title" style="margin: 0 0 10px; font-size: 20px; color: #3d1a1a; font-weight: 800;"></h2>
         <p id="delete-modal-desc" style="margin: 0 0 28px; color: #6b3a3a; font-size: 14px; line-height: 1.6;"></p>

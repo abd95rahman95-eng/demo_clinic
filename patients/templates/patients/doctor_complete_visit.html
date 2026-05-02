@@ -1,238 +1,271 @@
 {% extends 'patients/base.html' %}
+{% load patient_extras %}
 
 {% block title %}إكمال الزيارة{% endblock %}
 
 {% block content %}
 
+{% include 'patients/_quick_chips_assets.html' %}
+
 <div class="patient-view-wrapper">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-        <h1 style="margin: 0; font-size: 28px; color: #1e293b; font-weight: 800;">إكمال الزيارة: {{ visit.patient.name }}</h1>
-    </div>
-
-    <!-- Nursing Data (Readonly) -->
-    <div class="ui-form-card" style="padding: 25px 30px;">
-        <div class="ui-subsection" style="padding:0;">
-            <div class="ui-sub-title nursing-title" style="margin-bottom: 20px;">القسم التمريضي لزيارة ({{ visit.get_visit_type_display }})</div>
-            
-            {% if visit.chief_complaint %}
-            <div class="field-row">
-                <span class="field-label">الشكوى الرئيسية:</span>
-                <span class="field-value">{{ visit.chief_complaint }}</span>
-            </div>
-            {% endif %}
-
-            {% if visit.nursing_notes %}
-            <div class="field-row">
-                <span class="field-label">ملاحظات تمريضية:</span>
-                <span class="field-value">{{ visit.nursing_notes }}</span>
-            </div>
-            {% endif %}
-
-            {% if visit.blood_pressure or visit.pulse or visit.temperature or visit.weight or visit.height or visit.blood_sugar %}
-            <div class="vitals-grid">
-                {% if visit.blood_pressure %}<div class="vital-box"><div class="vital-label">ضغط الدم</div><div class="vital-value">{{ visit.blood_pressure }}</div></div>{% endif %}
-                {% if visit.pulse %}<div class="vital-box"><div class="vital-label">النبض</div><div class="vital-value">{{ visit.pulse }}</div></div>{% endif %}
-                {% if visit.temperature %}<div class="vital-box"><div class="vital-label">الحرارة</div><div class="vital-value">{{ visit.temperature }}</div></div>{% endif %}
-                {% if visit.weight %}<div class="vital-box"><div class="vital-label">الوزن</div><div class="vital-value">{{ visit.weight }}</div></div>{% endif %}
-                {% if visit.height %}<div class="vital-box"><div class="vital-label">الطول</div><div class="vital-value">{{ visit.height }}</div></div>{% endif %}
-                {% if visit.blood_sugar %}<div class="vital-box"><div class="vital-label">سكر الدم</div><div class="vital-value">{{ visit.blood_sugar }}</div></div>{% endif %}
-            </div>
-            {% endif %}
-        </div>
+        <h1 style="margin: 0; font-size: 28px; color: #1e293b; font-weight: 800;"><i class="fa-solid fa-stethoscope"></i> إكمال الزيارة: {{ visit.patient.name }}</h1>
     </div>
 
     <!-- Doctor Form -->
     <div class="ui-form-card">
-        <form method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data"
+              data-offline data-offline-key="doctor_complete_visit_{{ visit.id }}">
             {% csrf_token %}
 
             {% if form.errors %}
             <div class="error-card">
-                <h3>⚠️ يوجد خطأ في البيانات</h3>
+                <h3><i class="fa-solid fa-triangle-exclamation"></i> يوجد خطأ في البيانات</h3>
                 {{ form.errors }}
             </div>
             {% endif %}
 
-            <div class="section-title">القسم الطبي وملاحظات الطبيب</div>
+            {% comment %}
+               ─── NURSE DATA — READ-ONLY ──────────────────────────────────────
+               The doctor sees what the nurse entered. To change anything here,
+               click "تعديل البيانات التمريضية" — that opens nurse_edit_visit
+               (same page the nurse uses), saves, then returns to this page.
+               ───────────────────────────────────────────────────────────────
+            {% endcomment %}
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 18px; gap: 12px; flex-wrap: wrap;">
+                <div class="ui-sub-title nursing-title" style="margin:0;"><i class="fa-solid fa-user-nurse"></i> القسم التمريضي (للقراءة فقط)</div>
+                <a href="{% url 'nurse_edit_visit' visit.id %}?next=complete"
+                   class="btn-action btn-edit"
+                   style="text-decoration:none;">
+                    <i class="fa-solid fa-pen-to-square"></i> تعديل البيانات التمريضية
+                </a>
+            </div>
+
             <div class="form-grid-layout">
+                {% if visit.visit_type %}
                 <div class="form-group full-width">
-                    <label>{{ form.history_of_present_illness.label }}</label>
-                    {{ form.history_of_present_illness }}
-                </div>
-
-                <div class="form-group full-width">
-                    <label>{{ form.clinical_examination.label }}</label>
-                    {{ form.clinical_examination }}
-                </div>
-
-                {% if specialty == 'cardiology' %}
-                <div class="form-group full-width">
-                    <label>{{form.ecg_results.label}}</label>
-                    {{ form.ecg_results }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.ejection_fraction.label}}</label>
-                    {{ form.ejection_fraction }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.cardiac_history.label}}</label>
-                    {{ form.cardiac_history }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.chest_pain_type.label}}</label>
-                    {{ form.chest_pain_type }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.cardiac_medications.label}}</label>
-                    {{ form.cardiac_medications }}
+                    <label>نوع الزيارة</label>
+                    <div class="readonly-field">{{ visit.get_visit_type_display }}</div>
                 </div>
                 {% endif %}
-
-                {% if specialty == 'orthopedics' %}
+                {% if visit.chief_complaint %}
                 <div class="form-group full-width">
-                    <label>{{form.pain_location.label}}</label>
-                    {{ form.pain_location }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.pain_scale.label}}</label>
-                    {{ form.pain_scale }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.injury_history.label}}</label>
-                    {{ form.injury_history }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.range_of_motion.label}}</label>
-                    {{ form.range_of_motion }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.xray_findings.label}}</label>
-                    {{ form.xray_findings }}
+                    <label>الشكوى الرئيسية</label>
+                    <div class="readonly-field" style="white-space: pre-wrap;">{{ visit.chief_complaint }}</div>
                 </div>
                 {% endif %}
-
-                {% if specialty == 'neurology' %}
+                {% if visit.nursing_notes %}
                 <div class="form-group full-width">
-                    <label>{{form.CT_MRI_findings.label}}</label>
-                    {{ form.CT_MRI_findings }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.neurological_examination.label}}</label>
-                    {{ form.neurological_examination }}
+                    <label>ملاحظات تمريضية</label>
+                    <div class="readonly-field" style="white-space: pre-wrap;">{{ visit.nursing_notes }}</div>
                 </div>
                 {% endif %}
+                {% for f in vitals_specs %}
+                    {% with val=visit|get_attr:f.name %}
+                        {% if val %}
+                        <div class="form-group">
+                            <label>{{ f.label }}</label>
+                            <div class="readonly-field">{{ val }}</div>
+                        </div>
+                        {% endif %}
+                    {% endwith %}
+                {% endfor %}
+            </div>
 
-                {% if specialty == 'dermatology' %}
-                <div class="form-group full-width">
-                    <label>{{form.skin_examination.label}}</label>
-                    {{ form.skin_examination }}
+            {% if specialty == 'dentistry' %}
+            {% include 'patients/_dental_chart.html' %}
+            {% endif %}
+
+            <div class="section-title" style="margin-top: 26px;">القسم الطبي وملاحظات الطبيب</div>
+            <div class="form-grid-layout">
+                {% comment %}
+                   ─── DOCTOR-EDITABLE FIELDS ─────────────────────────────────
+                   Iterate the per-specialty medical manifest. Each entry is
+                   resolved against the bound form via the `form_field` filter,
+                   so adding/removing/reordering a field is a one-line edit
+                   in specialty_lists.py — no template change needed.
+                   follow_up_date is rendered LAST, AFTER the attachments and
+                   AI assist blocks (those live just above it).
+                   ────────────────────────────────────────────────────────────
+                {% endcomment %}
+                {% for f in medical_specs %}
+                    {% if f.name != 'follow_up_date' %}
+                        {% with field=form|form_field:f.name %}
+                            {% if field %}
+                            <div class="form-group full-width">
+                                <label>{{ field.label }}</label>
+                                {% include 'patients/_quick_chips.html' with field_id=field.id_for_label chips=quick_picks|get_attr:f.name %}
+                                {{ field }}
+                            </div>
+                            {% endif %}
+                        {% endwith %}
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            {# ─── المرفقات (متاحة لكل التخصصات) — قبل موعد المراجعة ─────── #}
+            <div class="ui-sub-title medical-title" style="margin: 28px 0 14px;"><i class="fa-solid fa-paperclip"></i> مرفقات الزيارة</div>
+            {% if visit.attachments.all %}
+            <div class="visit-attachments-grid">
+                {% for att in visit.attachments.all %}
+                <div class="attachment-thumb">
+                    <a href="{{ att.image.url }}" target="_blank" rel="noopener">
+                        <img src="{{ att.image.url }}" alt="مرفق">
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-msg" style="margin-bottom: 10px;">لا توجد مرفقات بعد.</div>
+            {% endif %}
+            {% if visit.attachments.count < 2 %}
+            <div class="form-group full-width" style="margin-bottom: 20px;">
+                <label for="{{ attachment_form.image.id_for_label }}">
+                    إضافة صورة / مرفق جديد
+                    <span style="font-size:12px; color:#7a8a9a; font-weight:400;">
+                        (الحد الأقصى: مرفقان لكل زيارة — تم رفع {{ visit.attachments.count }}/2)
+                    </span>
+                </label>
+                {{ attachment_form.image }}
+            </div>
+            {% else %}
+            <div class="empty-msg" style="margin-bottom: 20px; color:#a05a00;">
+                <i class="fa-solid fa-triangle-exclamation"></i> تم الوصول إلى الحد الأقصى للمرفقات (2/2) — لإضافة مرفق آخر احذف واحداً موجوداً.
+            </div>
+            {% endif %}
+
+            {# ─── مساعد الطبيب الذكي (Claude) — غير متاح لطب الأسنان ───── #}
+            {% if specialty != 'dentistry' %}
+            <div class="ai-assist-card" style="margin: 6px 0 24px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                    <div class="ui-sub-title medical-title" style="margin:0;"><i class="fa-solid fa-robot"></i> مساعد الطبيب الذكي</div>
+                    <button type="button" id="ai-assist-btn"
+                            data-url="{% url 'ai_medical_assistance' visit.id %}"
+                            class="btn-action btn-edit"
+                            style="background:#eef6ff; color:#1a3a6b; border:1px solid #c7d8f0;">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> توليد اقتراحات طبية
+                    </button>
+                </div>
+                <div id="ai-quota-bar" style="margin-top:6px; font-size:12px; color:#475569;">
+                    المتبقي اليوم: <b id="ai-quota-daily">{{ clinic.ai_daily_remaining }}</b>/{{ clinic.AI_DAILY_FREE_LIMIT }}
+                    &nbsp;•&nbsp; رصيد مشترى: <b id="ai-quota-credits">{{ clinic.ai_credits }}</b>
+                </div>
+                <div id="ai-assist-status" style="margin-top:8px; font-size:13px; color:#5a6a7a;"></div>
+                <div id="ai-assist-output"
+                     class="readonly-field"
+                     style="{% if visit.ai_suggestions %}display:block;{% else %}display:none;{% endif %} white-space:pre-wrap; margin-top:10px; background:#f7faff; border:1px dashed #c7d8f0;">{{ visit.ai_suggestions }}</div>
+                {% if visit.ai_suggestions %}
+                <div style="margin-top:6px; font-size:12px; color:#5a6a7a;">
+                    <i class="fa-solid fa-floppy-disk"></i> آخر اقتراحات محفوظة{% if visit.ai_generated_at %} — {{ visit.ai_generated_at|date:"Y-m-d H:i" }}{% endif %}
                 </div>
                 {% endif %}
+            </div>
 
-                {% if specialty == 'gynecology' %}
-                <div class="form-group full-width">
-                    <label>{{form.last_menstrual_period.label}}</label>
-                    {{ form.last_menstrual_period }}
+            {# ─── نافذة شراء التحليلات (تظهر عند انتهاء الرصيد) ───────── #}
+            <div id="ai-limit-modal" class="ai-modal-backdrop" style="display:none;">
+                <div class="ai-modal-card">
+                    <div class="ai-modal-title"><i class="fa-solid fa-triangle-exclamation"></i> انتهت تحليلات اليوم</div>
+                    <div class="ai-modal-body" id="ai-limit-modal-body">
+                        لقد استخدمت 3 تحليلات مجانية لهذا اليوم ولا يوجد رصيد مشترى متاح.
+                        يمكنك شراء المزيد من تحليلات المساعد الذكي للمتابعة.
+                    </div>
+                    <div class="ai-modal-actions">
+                        <a href="{% url 'pricing' %}" class="btn-submit" style="text-decoration:none;"><i class="fa-solid fa-cart-shopping"></i> شراء تحليلات إضافية</a>
+                        <button type="button" class="btn-cancel" id="ai-limit-modal-close">إغلاق</button>
+                    </div>
                 </div>
-                <div class="form-group full-width">
-                    <label>{{form.cycle_regularity.label}}</label>
-                    {{ form.cycle_regularity }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.contraception_method.label}}</label>
-                    {{ form.contraception_method }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.obstetric_history.label}}</label>
-                    {{ form.obstetric_history }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.gestational_age_weeks.label}}</label>
-                    {{ form.gestational_age_weeks }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.fundal_height.label}}</label>
-                    {{ form.fundal_height }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.abdominal_circumference.label}}</label>
-                    {{ form.abdominal_circumference }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.fetal_heart_rate.label}}</label>
-                    {{ form.fetal_heart_rate }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.fetal_movement.label}}</label>
-                    {{ form.fetal_movement }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.fetal_position.label}}</label>
-                    {{ form.fetal_position }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{form.ultrasound_notes.label}}</label>
-                    {{ form.ultrasound_notes }}
-                </div>
-                {% endif %}
+            </div>
+            {% endif %}
 
-                <div class="form-group full-width">
-                    <label>{{ form.lab_requests.label }}</label>
-                    {{ form.lab_requests }}
-                </div>
-
-                <div class="form-group full-width">
-                    <label>{{ form.lab_results.label }}</label>
-                    {{ form.lab_results }}
-                </div>
-
-                <div class="form-group full-width">
-                    <label>{{ form.imaging_requests.label }}</label>
-                    {{ form.imaging_requests }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{ form.imaging_results.label }}</label>
-                    {{ form.imaging_results }}
-                </div>
-
-                <div class="form-group full-width">
-                    <label>{{ form.doctor_notes.label }}</label>
-                    {{ form.doctor_notes }}
-                </div>
-
-                <div class="form-group full-width">
-                    <label>{{ form.diagnosis.label }}</label>
-                    {{ form.diagnosis }}
-                </div>
-
-                <div class="form-group full-width">
-                    <label>{{ form.treatment_plan.label }}</label>
-                    {{ form.treatment_plan }}
-                </div>
-
-                <div class="form-group full-width">
-                    <label>{{ form.patient_instructions.label }}</label>
-                    {{ form.patient_instructions }}
-                </div>
-                <div class="form-group full-width">
-                    <label>{{ form.prescription.label }}</label>
-                    {{ form.prescription }}
-                </div>
-
-                <div class="form-group">
-                    <label>{{ form.follow_up_date.label }}</label>
-                    {{ form.follow_up_date }}
-                </div>
+            {# ─── موعد المراجعة (آخر حقل في الصفحة) ─────────────────────── #}
+            <div class="form-grid-layout">
+                {% with field=form|form_field:'follow_up_date' %}
+                    {% if field %}
+                    <div class="form-group">
+                        <label>{{ field.label }}</label>
+                        {{ field }}
+                    </div>
+                    {% endif %}
+                {% endwith %}
             </div>
 
 
             <div class="form-actions">
-                <button type="submit" class="btn-submit">حفظ كزيارة مكتملة</button>
-                <a href="{% url 'doctor_pending_visits' %}" class="btn-cancel">إلغاء</a>
+                <button type="submit" class="btn-submit"><i class="fa-solid fa-circle-check"></i> حفظ كزيارة مكتملة</button>
+                <a href="{% url 'doctor_pending_visits' %}" class="btn-cancel"><i class="fa-solid fa-xmark"></i> إلغاء</a>
             </div>
         </form>
     </div>
 </div>
+
+<style>
+.visit-attachments-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.attachment-thumb {
+    border: 1px solid #d0e4d5;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f8fbf9;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.attachment-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.ai-assist-card {
+    background: #f7faff;
+    border: 1px solid #d8e4f5;
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+/* AI limit-reached modal */
+.ai-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+.ai-modal-card {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.25);
+    max-width: 460px;
+    width: 100%;
+    padding: 22px 24px;
+    text-align: center;
+}
+.ai-modal-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #b45309;
+    margin-bottom: 10px;
+}
+.ai-modal-body {
+    font-size: 14px;
+    color: #334155;
+    line-height: 1.7;
+    margin-bottom: 18px;
+}
+.ai-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+</style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -247,6 +280,78 @@
                 this.style.height = this.scrollHeight + 'px';
             });
         });
+
+        // ── AI medical assistance — calls our Django endpoint, which proxies
+        // to Claude with a specialty-aware prompt. Output is shown read-only.
+        const aiBtn = document.getElementById('ai-assist-btn');
+        const limitModal = document.getElementById('ai-limit-modal');
+        const limitModalClose = document.getElementById('ai-limit-modal-close');
+        const limitModalBody  = document.getElementById('ai-limit-modal-body');
+        const dailyEl   = document.getElementById('ai-quota-daily');
+        const creditsEl = document.getElementById('ai-quota-credits');
+
+        function showLimitModal(msg) {
+            if (!limitModal) return;
+            if (msg && limitModalBody) limitModalBody.textContent = msg;
+            limitModal.style.display = 'flex';
+        }
+        if (limitModalClose) {
+            limitModalClose.addEventListener('click', function () {
+                limitModal.style.display = 'none';
+            });
+        }
+        if (limitModal) {
+            limitModal.addEventListener('click', function (e) {
+                if (e.target === limitModal) limitModal.style.display = 'none';
+            });
+        }
+
+        if (aiBtn) {
+            aiBtn.addEventListener('click', async function () {
+                const statusEl = document.getElementById('ai-assist-status');
+                const outEl    = document.getElementById('ai-assist-output');
+                const url      = aiBtn.dataset.url;
+
+                aiBtn.disabled = true;
+                aiBtn.style.opacity = 0.6;
+                statusEl.textContent = '⏳ جارٍ توليد الاقتراحات...';
+                // Keep any previously-saved suggestions visible until we have new ones.
+
+                try {
+                    const csrf = document.querySelector('input[name=csrfmiddlewaretoken]').value;
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrf,
+                            'Content-Type': 'application/json',
+                        },
+                        body: '{}',
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok || !data.ok) {
+                        if (data && data.limit_reached) {
+                            statusEl.textContent = '⚠️ انتهت تحليلات اليوم — يمكنك شراء المزيد للمتابعة.';
+                            showLimitModal(data.error);
+                            if (dailyEl)   dailyEl.textContent   = (data.daily_remaining ?? 0);
+                            if (creditsEl) creditsEl.textContent = (data.credits_remaining ?? 0);
+                        } else {
+                            statusEl.textContent = '⚠️ ' + (data.error || 'تعذر توليد الاقتراحات.');
+                        }
+                    } else {
+                        statusEl.textContent = '✅ تم التوليد وحفظه على الزيارة. هذه اقتراحات مساعدة فقط — القرار النهائي للطبيب.';
+                        outEl.textContent = data.suggestions || '';
+                        outEl.style.display = 'block';
+                        if (dailyEl)   dailyEl.textContent   = (data.daily_remaining ?? 0);
+                        if (creditsEl) creditsEl.textContent = (data.credits_remaining ?? 0);
+                    }
+                } catch (err) {
+                    statusEl.textContent = '⚠️ خطأ في الاتصال: ' + err.message;
+                } finally {
+                    aiBtn.disabled = false;
+                    aiBtn.style.opacity = 1;
+                }
+            });
+        }
     });
 </script>
 

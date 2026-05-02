@@ -35,6 +35,26 @@ CSRF_TRUSTED_ORIGINS = os.environ.get(
     "http://127.0.0.1,http://localhost"
 ).split(",")
 
+# ─── Capacitor / mobile-app trusted origins ──────────────────────────────
+# When the site runs inside the Capacitor native shell (iOS/Android), the
+# webview origin is NOT the production domain — it's one of:
+#   • iOS:     capacitor://localhost
+#   • Android: https://localhost  (with a custom scheme allowlist)
+#   • Both:    can be overridden via capacitor.config.ts -> server.hostname
+# We extend CSRF_TRUSTED_ORIGINS so POSTs from the native shell don't 403,
+# and SESSION_COOKIE_SAMESITE = 'None' so the session cookie is sent on
+# cross-scheme requests (capacitor:// → https://api.eyadatak.com).
+CSRF_TRUSTED_ORIGINS += [
+    "capacitor://localhost",
+    "ionic://localhost",
+    "http://localhost",
+    "https://localhost",
+]
+# In production, set SESSION_COOKIE_SAMESITE='None' AND SESSION_COOKIE_SECURE=True
+# so the cookie is delivered over HTTPS from the native shell.
+SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_SAMESITE   = os.environ.get("CSRF_COOKIE_SAMESITE",   "Lax")
+
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = not DEBUG
@@ -135,7 +155,46 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STORAGES = {
+    # Default storage — used by ImageField/FileField uploads (visit attachments).
+    # Django 6.x requires this key to be present explicitly.
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    }
+    },
 }
+
+# Media (uploaded files — visit attachments)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / "media"
+
+# Anthropic / Claude API key (used by AI medical assistance endpoint).
+# Add ANTHROPIC_API_KEY=... to your local .env to enable AI suggestions.
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+
+# ─── Email (used for SignupRequest notifications) ────────────────────────
+# Defaults to the console backend so dev never errors out — emails just
+# print to stdout. To send real emails, set EMAIL_HOST, EMAIL_HOST_USER,
+# EMAIL_HOST_PASSWORD in .env (and switch backend to SMTP).
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST          = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT          = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER     = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS       = os.environ.get("EMAIL_USE_TLS", "True") == "True"
+DEFAULT_FROM_EMAIL  = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    "Eyadatak <noreply@eyadatak.com>",
+)
+# Where signup notifications get delivered. Comma-separated for multiple.
+SIGNUP_NOTIFY_EMAILS = [
+    e.strip() for e in os.environ.get(
+        "SIGNUP_NOTIFY_EMAILS",
+        "support@eyadatak.com",
+    ).split(",") if e.strip()
+]

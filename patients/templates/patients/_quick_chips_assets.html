@@ -1,0 +1,85 @@
+{% comment %}
+Shared CSS + JS for quick-pick chips.
+Include ONCE per page that uses _quick_chips.html.
+Theme: matches the green clinic theme.
+{% endcomment %}
+<style>
+    .quick-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 4px 0 8px;
+    }
+    .quick-chip {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #6ee7b7;
+        border-radius: 999px;
+        padding: 4px 12px;
+        font-size: 13px;
+        line-height: 1.4;
+        cursor: pointer;
+        font-family: inherit;
+        transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+    }
+    .quick-chip:hover {
+        background: #a7f3d0;
+        box-shadow: 0 1px 3px rgba(6, 95, 70, 0.15);
+    }
+    .quick-chip:active {
+        transform: scale(0.97);
+    }
+    .quick-chip:focus {
+        outline: 2px solid #10b981;
+        outline-offset: 1px;
+    }
+</style>
+
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.quick-chips').forEach(function (container) {
+            var targetId = container.getAttribute('data-target');
+            if (!targetId) return;
+            var target = document.getElementById(targetId);
+            if (!target) return;
+
+            container.querySelectorAll('.quick-chip').forEach(function (chip) {
+                chip.addEventListener('click', function () {
+                    var value = chip.getAttribute('data-value') || '';
+                    var tag  = (target.tagName || '').toLowerCase();
+                    var type = (target.getAttribute('type') || '').toLowerCase();
+
+                    if (tag === 'textarea') {
+                        // append on a new line
+                        if (target.value && !/\n$/.test(target.value)) {
+                            target.value += '\n';
+                        }
+                        target.value += value;
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                    } else if (
+                        type === 'date' ||
+                        type === 'datetime-local' ||
+                        type === 'number'
+                    ) {
+                        // replace whole value
+                        target.value = value;
+                        target.dispatchEvent(new Event('change', { bubbles: true }));
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                    } else {
+                        // generic text input — Arabic-comma separated
+                        if (target.value) {
+                            target.value += '، ' + value;
+                        } else {
+                            target.value = value;
+                        }
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+
+                    target.focus();
+                });
+            });
+        });
+    });
+})();
+</script>

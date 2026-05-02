@@ -1,6 +1,12 @@
 from django import forms
 from django.contrib.auth.models import User
 from .models import Visit, UserProfile, Patient, VisitAttachment, SignupRequest
+from .specialty_lists import (
+    get_nursing_fields,
+    get_specialty_medical_fields,
+    ALL_NURSING_VITALS,
+    ALL_SPECIALTY_MEDICAL_FIELDS,
+)
 
 class PatientForm(forms.ModelForm):
     class Meta:
@@ -91,6 +97,13 @@ class NurseVisitForm(forms.ModelForm):
             elif doctors.count() == 0:
                 self.fields['assigned_doctor'].queryset = User.objects.none()
 
+            # Drop vitals not used by this specialty (e.g. dermatology has no
+            # weight/blood_sugar). Driven by SPECIALTY_NURSING_FIELDS.
+            allowed_vitals = set(get_nursing_fields(clinic.specialty))
+            for f in ALL_NURSING_VITALS:
+                if f not in allowed_vitals and f in self.fields:
+                    self.fields.pop(f, None)
+
     def clean_assigned_doctor(self):
         doctor = self.cleaned_data.get('assigned_doctor')
         if not doctor:
@@ -104,6 +117,17 @@ class DoctorVisitForm(forms.ModelForm):
     class Meta:
         model = Visit
         fields = [
+            # Nurse-entered fields (doctor may correct/complete)
+            'visit_type',
+            'chief_complaint',
+            'nursing_notes',
+            'blood_pressure',
+            'pulse',
+            'temperature',
+            'weight',
+            'height',
+            'blood_sugar',
+            # Doctor fields
             'history_of_present_illness',
             'clinical_examination',
             'diagnosis',
@@ -148,6 +172,15 @@ class DoctorVisitForm(forms.ModelForm):
             
         ]
         labels = {
+            'visit_type': 'نوع الزيارة',
+            'chief_complaint': 'الشكوى الرئيسية',
+            'nursing_notes': 'ملاحظات تمريضية',
+            'blood_pressure': 'ضغط الدم',
+            'pulse': 'النبض',
+            'temperature': 'الحرارة',
+            'weight': 'الوزن',
+            'height': 'الطول',
+            'blood_sugar': 'سكر الدم',
             'history_of_present_illness': 'القصة المرضية الحالية',
             'clinical_examination': 'الفحص السريري',
             'diagnosis': 'التشخيص',
@@ -192,6 +225,15 @@ class DoctorVisitForm(forms.ModelForm):
             'skin_examination':     'فحص الجلد',
         }
         widgets = {
+            'visit_type':      forms.Select(attrs={'class': 'form-control'}),
+            'chief_complaint': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'nursing_notes':   forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'blood_pressure':  forms.TextInput(attrs={'class': 'form-control'}),
+            'pulse':           forms.TextInput(attrs={'class': 'form-control'}),
+            'temperature':     forms.TextInput(attrs={'class': 'form-control'}),
+            'weight':          forms.TextInput(attrs={'class': 'form-control'}),
+            'height':          forms.TextInput(attrs={'class': 'form-control'}),
+            'blood_sugar':     forms.TextInput(attrs={'class': 'form-control'}),
             'history_of_present_illness': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'clinical_examination': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'diagnosis': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
@@ -200,7 +242,7 @@ class DoctorVisitForm(forms.ModelForm):
             'lab_requests': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'imaging_requests': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'patient_instructions': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'follow_up_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'follow_up_date': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
             'doctor_notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'imaging_results': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'lab_results': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
@@ -235,14 +277,75 @@ class DoctorVisitForm(forms.ModelForm):
             'skin_examination':     forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
+    # Nurse-side fields. When `exclude_nurse=True` is passed, the form will
+    # drop these so the doctor's complete-visit POST can't accidentally
+    # overwrite nurse data — the doctor edits nurse data via the dedicated
+    # nurse-edit page instead.
+    NURSE_FIELDS = (
+        'visit_type',
+        'chief_complaint', 'nursing_notes',
+        'blood_pressure', 'pulse', 'temperature',
+        'weight', 'height', 'blood_sugar',
+    )
+
+    def __init__(self, *args, **kwargs):
+        # Custom kwargs — must pop BEFORE calling super().
+        specialty     = kwargs.pop('specialty', None)
+        exclude_nurse = kwargs.pop('exclude_nurse', False)
+
+        super().__init__(*args, **kwargs)
+
+        # Allow HTML5 datetime-local input format ("YYYY-MM-DDTHH:MM")
+        # in addition to Django's default DateTimeField formats.
+        self.fields['follow_up_date'].input_formats = [
+            '%Y-%m-%dT%H:%M',
+            '%Y-%m-%dT%H:%M:%S',
+            '%Y-%m-%d %H:%M',
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d',
+        ]
+
+        # Drop specialty-specific medical fields that don't belong to this
+        # clinic's specialty (e.g. ejection_fraction in a dermatology clinic).
+        if specialty is not None:
+            allowed = set(get_specialty_medical_fields(specialty))
+            for f in ALL_SPECIALTY_MEDICAL_FIELDS:
+                if f not in allowed and f in self.fields:
+                    self.fields.pop(f, None)
+
+            # Vitals not used by this specialty — drop them too so the doctor
+            # doesn't see stale fields if they appear on the form anywhere.
+            allowed_vitals = set(get_nursing_fields(specialty))
+            for f in ALL_NURSING_VITALS:
+                if f not in allowed_vitals and f in self.fields:
+                    self.fields.pop(f, None)
+
+        # In the doctor-complete flow, the nurse fields are read-only on the
+        # page and edited via nurse_edit_visit. Drop them from this form so
+        # the doctor's submit can never blow them away.
+        if exclude_nurse:
+            for f in self.NURSE_FIELDS:
+                self.fields.pop(f, None)
+
 
 class VisitAttachmentForm(forms.ModelForm):
     class Meta:
         model = VisitAttachment
         fields = ['image']
         widgets = {
+            # Attachment is OPTIONAL — the doctor / nurse must be able to
+            # save the visit without uploading an image. We strip the HTML
+            # `required` attribute as well as setting required=False on the
+            # form field below.
             'image': forms.ClearableFileInput(attrs={'class': 'form-control'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make the image field optional at the form level.
+        self.fields['image'].required = False
+        # Defensive: ensure the rendered <input> doesn't carry `required`.
+        self.fields['image'].widget.attrs.pop('required', None)
 
 
 class SignupRequestForm(forms.ModelForm):

@@ -1,0 +1,764 @@
+{% comment %}
+Dental chart partial.
+Required context:
+    visit          — Visit instance
+    dental_data    — Python dict: {"<tooth>-<surface>": {"condition": "...", "note": "..."}}
+                     (the json_script filter below encodes it for the JS)
+    dental_choices — {'conditions': [...], 'surfaces': [...]}
+{% endcomment %}
+
+<style>
+    .dental-chart-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+    .dental-chart-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: #1a3d28;
+        margin: 0 0 6px;
+    }
+    .dental-chart-sub {
+        font-size: 13px;
+        color: #6b7280;
+        margin-bottom: 14px;
+    }
+    .dental-chart-svg-wrap {
+        overflow-x: auto;
+        background: #fafafa;
+        border-radius: 8px;
+        padding: 12px;
+    }
+    .dental-chart-svg {
+        display: block;
+        margin: 0 auto;
+        min-width: 760px;
+    }
+
+    /* Per-condition fill colors for surfaces */
+    .tooth-surface { fill: #ffffff; stroke: #94a3b8; stroke-width: 1; cursor: pointer; transition: fill 0.12s; }
+    .tooth-surface:hover { stroke: #1a6b3c; stroke-width: 1.6; }
+    .tooth-surface.cond-healthy    { fill: #ffffff; }
+    .tooth-surface.cond-caries     { fill: #b02a37; }
+    .tooth-surface.cond-filling    { fill: #2563eb; }
+    .tooth-surface.cond-crown      { fill: #f59e0b; }
+    .tooth-surface.cond-rct        { fill: #7c3aed; }
+    .tooth-surface.cond-fracture   { fill: #ef4444; opacity: 0.85; }
+    .tooth-surface.cond-missing    { fill: #6b7280; }
+    .tooth-surface.cond-to_extract { fill: #fda4af; }
+    .tooth-surface.cond-to_treat   { fill: #fef08a; }
+    .tooth-surface.cond-implant    { fill: #14b8a6; }
+    .tooth-surface.cond-bridge     { fill: #f97316; }
+
+    /* Root shapes (path elements, tapered) */
+    .tooth-root {
+        fill: #f1f5f9;
+        stroke: #94a3b8;
+        stroke-width: 1;
+        cursor: pointer;
+        transition: fill 0.12s;
+    }
+    .tooth-root:hover { stroke: #1a6b3c; stroke-width: 1.6; }
+    .tooth-root.cond-healthy    { fill: #f1f5f9; }
+    .tooth-root.cond-rct        { fill: #7c3aed; }
+    .tooth-root.cond-fracture   { fill: #ef4444; }
+    .tooth-root.cond-missing    { fill: #6b7280; }
+    .tooth-root.cond-implant    { fill: #14b8a6; }
+    .tooth-root.cond-to_treat   { fill: #fef08a; }
+    .tooth-root.cond-caries     { fill: #b02a37; }
+    .tooth-root.cond-filling    { fill: #2563eb; }
+    .tooth-root.cond-crown      { fill: #f59e0b; }
+    .tooth-root.cond-to_extract { fill: #fda4af; }
+    .tooth-root.cond-bridge     { fill: #f97316; }
+
+    .root-label {
+        font-size: 8px;
+        fill: #475569;
+        text-anchor: middle;
+        pointer-events: none;
+        user-select: none;
+        font-weight: 700;
+    }
+
+    .tooth-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-anchor: middle;
+        fill: #1f2937;
+        cursor: pointer;
+        user-select: none;
+    }
+    .tooth-label-bg {
+        fill: transparent;
+        cursor: pointer;
+    }
+    .tooth-label-bg:hover + .tooth-label,
+    .tooth-label:hover {
+        fill: #1a6b3c;
+    }
+
+    /* Whole-tooth overlay (when the entire tooth is missing/extraction/etc.) */
+    .tooth-whole-overlay {
+        cursor: pointer;
+        opacity: 0.78;
+        stroke: #1f2937;
+        stroke-width: 1;
+        stroke-dasharray: 4,3;
+    }
+    .tooth-whole-overlay.cond-missing    { fill: #6b7280; }
+    .tooth-whole-overlay.cond-to_extract { fill: #fda4af; }
+    .tooth-whole-overlay.cond-implant    { fill: #14b8a6; }
+    .tooth-whole-overlay.cond-fracture   { fill: #ef4444; }
+    .tooth-whole-overlay.cond-crown      { fill: #f59e0b; }
+    .tooth-whole-overlay.cond-bridge     { fill: #f97316; }
+    .tooth-whole-overlay.cond-rct        { fill: #7c3aed; }
+    .tooth-whole-overlay.cond-caries     { fill: #b02a37; }
+    .tooth-whole-overlay.cond-filling    { fill: #2563eb; }
+    .tooth-whole-overlay.cond-to_treat   { fill: #fef08a; }
+    .tooth-whole-overlay.cond-healthy    { fill: #ffffff; opacity: 0.5; }
+
+    .quadrant-divider { stroke: #cbd5e1; stroke-dasharray: 3,3; }
+
+    /* Legend */
+    .dental-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+        font-size: 12px;
+    }
+    .dental-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #1f2937;
+        background: #f1f5f9;
+        padding: 4px 10px;
+        border-radius: 999px;
+    }
+    .dental-legend-swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1px solid #94a3b8;
+    }
+
+    /* Picker popup */
+    .dental-picker-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        display: none;
+        z-index: 1500;
+        align-items: center;
+        justify-content: center;
+    }
+    .dental-picker-overlay.show { display: flex; }
+    .dental-picker {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 20px 22px;
+        width: min(420px, 92vw);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    }
+    .dental-picker-title {
+        margin: 0 0 4px;
+        font-size: 17px;
+        color: #1a3d28;
+        font-weight: 800;
+    }
+    .dental-picker-sub {
+        margin: 0 0 14px;
+        color: #6b7280;
+        font-size: 13px;
+    }
+    .dental-condition-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+    .dental-condition-btn {
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px;
+        font-family: inherit;
+        font-size: 14px;
+        cursor: pointer;
+        text-align: center;
+        font-weight: 600;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: border-color 0.12s, transform 0.1s;
+    }
+    .dental-condition-btn:hover { border-color: #1a6b3c; }
+    .dental-condition-btn.selected { border-color: #1a6b3c; background: #ecfdf5; }
+    .dental-condition-dot {
+        width: 12px; height: 12px; border-radius: 3px;
+        border: 1px solid #94a3b8;
+        flex-shrink: 0;
+    }
+    .dental-picker-note {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        font-family: inherit;
+        font-size: 13px;
+        margin-bottom: 14px;
+        box-sizing: border-box;
+    }
+    .dental-picker-actions {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .dental-picker-actions button {
+        padding: 9px 16px;
+        border-radius: 8px;
+        font-family: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        border: none;
+        font-size: 14px;
+    }
+    .dental-picker-clear  { background: #fef2f2; color: #b02a37; border: 1px solid #fecaca; }
+    .dental-picker-cancel { background: #f1f5f9; color: #1f2937; }
+    .dental-picker-save   { background: #1a6b3c; color: white; margin-right: auto; }
+</style>
+
+<div class="dental-chart-card">
+    <div class="dental-chart-title">🦷 المخطط السني</div>
+    <div class="dental-chart-sub">
+        اضغط على أي سطح لتحديد حالته. اضغط على رقم السن لتمييز السن بأكمله (مفقود، خلع، زرعة...).
+    </div>
+
+    <div class="dental-chart-svg-wrap">
+        <svg class="dental-chart-svg" viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+
+    <div class="dental-legend" id="dentalLegend"></div>
+</div>
+
+<!-- Picker popup -->
+<div class="dental-picker-overlay" id="dentalPickerOverlay">
+    <div class="dental-picker" role="dialog" aria-modal="true">
+        <h3 class="dental-picker-title" id="dentalPickerTitle">اختر الحالة</h3>
+        <div class="dental-picker-sub" id="dentalPickerSub"></div>
+        <div class="dental-condition-grid" id="dentalConditionGrid"></div>
+        <input type="text" class="dental-picker-note" id="dentalPickerNote" placeholder="ملاحظة (اختياري)" maxlength="200">
+        <div class="dental-picker-actions">
+            <button type="button" class="dental-picker-save"   id="dentalPickerSave">حفظ</button>
+            <button type="button" class="dental-picker-clear"  id="dentalPickerClear">مسح</button>
+            <button type="button" class="dental-picker-cancel" id="dentalPickerCancel">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+{{ dental_data|json_script:"dental-data" }}
+
+<script>
+(function () {
+    // ---------- Configuration ----------
+    var SAVE_URL = "{% url 'update_tooth_condition' visit.id %}";
+    var CSRF = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+
+    var CONDITIONS = [
+        {% for code, label in dental_choices.conditions %}
+        { code: "{{ code }}", label: "{{ label }}" }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    var SURFACE_LABELS = {
+        {% for code, label in dental_choices.surfaces %}
+        "{{ code }}": "{{ label }}"{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    };
+
+    // Color map (kept in sync with CSS .cond-* classes)
+    var CONDITION_COLORS = {
+        healthy:    '#ffffff',
+        caries:     '#b02a37',
+        filling:    '#2563eb',
+        crown:      '#f59e0b',
+        rct:        '#7c3aed',
+        fracture:   '#ef4444',
+        missing:    '#6b7280',
+        to_extract: '#fda4af',
+        to_treat:   '#fef08a',
+        implant:    '#14b8a6',
+        bridge:     '#f97316'
+    };
+
+    // FDI numbering for adult teeth
+    var UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11];
+    var UPPER_LEFT  = [21, 22, 23, 24, 25, 26, 27, 28];
+    var LOWER_LEFT  = [31, 32, 33, 34, 35, 36, 37, 38];
+    var LOWER_RIGHT = [48, 47, 46, 45, 44, 43, 42, 41];
+    var UPPER = UPPER_RIGHT.concat(UPPER_LEFT);
+    var LOWER = LOWER_RIGHT.concat(LOWER_LEFT);
+
+    // Anatomical groups
+    // - Anterior teeth (incisors + canines): no Occlusal surface
+    var ANTERIOR_TEETH = new Set(['11','12','13','21','22','23','31','32','33','41','42','43']);
+    // - Upper molars: 3 roots (Mesiobuccal, Distobuccal, Palatal) — labeled M, P, D
+    var THREE_ROOT_TEETH = new Set(['16','17','18','26','27','28']);
+    // - Lower molars: 2 roots (Mesial, Distal)
+    var TWO_ROOT_TEETH = new Set(['36','37','38','46','47','48']);
+
+    // Initial saved data
+    var initialEl = document.getElementById('dental-data');
+    var DATA = initialEl ? JSON.parse(initialEl.textContent || '{}') : {};
+
+    // ---------- Layout ----------
+    var svg = document.querySelector('.dental-chart-svg');
+    if (!svg) return;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.setAttribute('viewBox', '0 0 760 400');
+
+    var TOOTH_W = 40;
+    var TOOTH_H = 60;
+    var ROOT_H  = 32;            // taller so the taper is visible
+    var GAP_X   = 5;
+    var ROW_GAP = 26;
+    var TOTAL_COLS = 16;
+    var CHART_W = TOTAL_COLS * (TOOTH_W + GAP_X) - GAP_X;
+    var ORIGIN_X = (760 - CHART_W) / 2;
+
+    var UP_ROOT_Y     = 30;
+    var UP_TOOTH_Y    = UP_ROOT_Y + ROOT_H;
+    var UP_LABEL_Y    = UP_TOOTH_Y + TOOTH_H + 14;
+
+    var LO_TOOTH_Y    = UP_LABEL_Y + ROW_GAP;
+    var LO_ROOT_Y     = LO_TOOTH_Y + TOOTH_H;
+    var LO_LABEL_Y    = LO_ROOT_Y + ROOT_H + 14;
+
+    function svgEl(name, attrs) {
+        var el = document.createElementNS('http://www.w3.org/2000/svg', name);
+        if (attrs) for (var k in attrs) el.setAttribute(k, attrs[k]);
+        return el;
+    }
+
+    // ---------- Root rendering (tapered path) ----------
+    // Returns the SVG path "d" for a single tapered root in a bounding box.
+    // Upper root: wide at bottom (touching tooth), narrows to a tip at top.
+    // Lower root: wide at top (touching tooth), narrows to a tip at bottom.
+    function rootPath(x, y, w, h, isUpper) {
+        var taper   = w * 0.30;
+        var tipY    = isUpper ? y : (y + h);
+        var baseY   = isUpper ? (y + h) : y;
+        var tipPad  = w * 0.18;
+        var leftBaseX  = x;
+        var rightBaseX = x + w;
+        var leftTipX   = x + taper;
+        var rightTipX  = x + w - taper;
+        var midY = (tipY + baseY) / 2;
+
+        return 'M ' + leftBaseX + ' ' + baseY +
+               ' C ' + (leftBaseX + 1) + ' ' + midY + ', ' +
+                       (leftTipX - 2)  + ' ' + (tipY + (isUpper ? 4 : -4)) + ', ' +
+                       (leftTipX + tipPad/2) + ' ' + tipY +
+               ' L ' + (rightTipX - tipPad/2) + ' ' + tipY +
+               ' C ' + (rightTipX + 2) + ' ' + (tipY + (isUpper ? 4 : -4)) + ', ' +
+                       (rightBaseX - 1) + ' ' + midY + ', ' +
+                       rightBaseX + ' ' + baseY +
+               ' Z';
+    }
+
+    function rootSpecsFor(tooth) {
+        var t = String(tooth);
+        // Quadrants 1 (upper right) and 4 (lower right) are on the viewer-left
+        // half of the chart, but mesial is closer to the midline (viewer-right).
+        // So for these quadrants, the root order is reversed compared to left-side.
+        var quadrant = parseInt(t[0], 10);
+        var rightQuadrant = (quadrant === 1 || quadrant === 4);
+
+        if (THREE_ROOT_TEETH.has(t)) {
+            // Upper molars: Mesiobuccal, Palatal (middle), Distobuccal
+            var specs3 = [
+                { code: 'MR', label: 'M' },
+                { code: 'PR', label: 'P' },
+                { code: 'DR', label: 'D' }
+            ];
+            return rightQuadrant ? specs3.slice().reverse() : specs3;
+        }
+        if (TWO_ROOT_TEETH.has(t)) {
+            // Lower molars: Mesial, Distal
+            var specs2 = [
+                { code: 'MR', label: 'M' },
+                { code: 'DR', label: 'D' }
+            ];
+            return rightQuadrant ? specs2.slice().reverse() : specs2;
+        }
+        return [{ code: 'R', label: '' }];
+    }
+
+    function buildRoots(tnum, x, isUpper) {
+        var elements = [];
+        var specs = rootSpecsFor(tnum);
+        var n = specs.length;
+
+        var totalW = TOOTH_W - 4;        // small inset so roots don't touch neighbours
+        var rootGap = (n > 1) ? 2 : 0;
+        var rootW = (totalW - (n - 1) * rootGap) / n;
+        var rootBaseX = x + 2;
+        var rootY = isUpper ? UP_ROOT_Y : LO_ROOT_Y;
+
+        for (var i = 0; i < n; i++) {
+            var rx = rootBaseX + i * (rootW + rootGap);
+            var path = svgEl('path', {
+                'class': 'tooth-root',
+                'data-tooth': tnum,
+                'data-surface': specs[i].code,
+                d: rootPath(rx, rootY, rootW, ROOT_H, isUpper)
+            });
+            elements.push(path);
+
+            if (specs[i].label) {
+                var labelY = isUpper ? (rootY + ROOT_H - 6) : (rootY + 10);
+                var lbl = svgEl('text', {
+                    'class': 'root-label',
+                    x: rx + rootW / 2,
+                    y: labelY
+                });
+                lbl.textContent = specs[i].label;
+                elements.push(lbl);
+            }
+        }
+        return elements;
+    }
+
+    // ---------- Crown rendering ----------
+    function buildCrown(tnum, x, isUpper) {
+        var elements = [];
+        var toothY = isUpper ? UP_TOOTH_Y : LO_TOOTH_Y;
+        var quadrant = parseInt(String(tnum)[0], 10);
+        // mesial = closer to midline. Right quadrants (1, 4) → mesial on viewer-right.
+        var mesialIsRight = (quadrant === 1 || quadrant === 4);
+        var leftSurface  = mesialIsRight ? 'D' : 'M';
+        var rightSurface = mesialIsRight ? 'M' : 'D';
+
+        var topSurface    = isUpper ? 'B' : 'L';
+        var bottomSurface = isUpper ? 'L' : 'B';
+        var bandH = TOOTH_H / 3;
+
+        if (ANTERIOR_TEETH.has(String(tnum))) {
+            // 4-zone layout: top / (M | D) / bottom — no occlusal cell
+            elements.push(svgEl('rect', {
+                'class': 'tooth-surface',
+                'data-tooth': tnum, 'data-surface': topSurface,
+                x: x, y: toothY, width: TOOTH_W, height: bandH
+            }));
+            elements.push(svgEl('rect', {
+                'class': 'tooth-surface',
+                'data-tooth': tnum, 'data-surface': leftSurface,
+                x: x, y: toothY + bandH, width: TOOTH_W / 2, height: bandH
+            }));
+            elements.push(svgEl('rect', {
+                'class': 'tooth-surface',
+                'data-tooth': tnum, 'data-surface': rightSurface,
+                x: x + TOOTH_W / 2, y: toothY + bandH, width: TOOTH_W / 2, height: bandH
+            }));
+            elements.push(svgEl('rect', {
+                'class': 'tooth-surface',
+                'data-tooth': tnum, 'data-surface': bottomSurface,
+                x: x, y: toothY + 2 * bandH, width: TOOTH_W, height: bandH
+            }));
+        } else {
+            // 5-zone layout for posterior teeth: top / (D | O | M) / bottom
+            var cellW = TOOTH_W / 3;
+            elements.push(svgEl('rect', {
+                'class': 'tooth-surface',
+                'data-tooth': tnum, 'data-surface': topSurface,
+                x: x, y: toothY, width: TOOTH_W, height: bandH
+            }));
+            elements.push(svgEl('rect', {
+                'class': 'tooth-surface',
+                'data-tooth': tnum, 'data-surface': leftSurface,
+                x: x, y: toothY + bandH, width: cellW, height: bandH
+            }));
+            elements.push(svgEl('rect', {
+                'class': 'tooth-surface',
+                'data-tooth': tnum, 'data-surface': 'O',
+                x: x + cellW, y: toothY + bandH, width: cellW, height: bandH
+            }));
+            elements.push(svgEl('rect', {
+                'class': 'tooth-surface',
+                'data-tooth': tnum, 'data-surface': rightSurface,
+                x: x + 2 * cellW, y: toothY + bandH, width: cellW, height: bandH
+            }));
+            elements.push(svgEl('rect', {
+                'class': 'tooth-surface',
+                'data-tooth': tnum, 'data-surface': bottomSurface,
+                x: x, y: toothY + 2 * bandH, width: TOOTH_W, height: bandH
+            }));
+        }
+        return elements;
+    }
+
+    // ---------- Build a single tooth group ----------
+    function buildTooth(tnum, x, isUpper) {
+        var g = svgEl('g', {
+            'class': 'tooth',
+            'data-tooth': tnum,
+            'data-x': x,
+            'data-is-upper': isUpper ? '1' : '0'
+        });
+
+        // Roots first
+        buildRoots(tnum, x, isUpper).forEach(function (el) { g.appendChild(el); });
+        // Crown surfaces
+        buildCrown(tnum, x, isUpper).forEach(function (el) { g.appendChild(el); });
+
+        // Tooth number label — clickable for whole-tooth picker
+        var labelY = isUpper ? UP_LABEL_Y : LO_LABEL_Y;
+        var hit = svgEl('rect', {
+            'class': 'tooth-label-bg',
+            'data-tooth': tnum, 'data-surface': 'whole',
+            x: x + TOOTH_W / 2 - 14, y: labelY - 12,
+            width: 28, height: 16
+        });
+        var lbl = svgEl('text', {
+            'class': 'tooth-label',
+            'data-tooth': tnum, 'data-surface': 'whole',
+            x: x + TOOTH_W / 2, y: labelY
+        });
+        lbl.textContent = tnum;
+        g.appendChild(hit);
+        g.appendChild(lbl);
+
+        return g;
+    }
+
+    function renderRow(arr, isUpper) {
+        for (var i = 0; i < arr.length; i++) {
+            var x = ORIGIN_X + i * (TOOTH_W + GAP_X);
+            svg.appendChild(buildTooth(arr[i], x, isUpper));
+        }
+    }
+    renderRow(UPPER, true);
+    renderRow(LOWER, false);
+
+    // Quadrant divider (vertical line through middle)
+    var midX = ORIGIN_X + 8 * (TOOTH_W + GAP_X) - GAP_X / 2;
+    svg.appendChild(svgEl('line', {
+        'class': 'quadrant-divider',
+        x1: midX, y1: 20, x2: midX, y2: 380
+    }));
+
+    // ---------- Apply / clear visual condition ----------
+    function applySurfaceCondition(tooth, surface, condition) {
+        var sel = '[data-tooth="' + tooth + '"][data-surface="' + surface + '"]';
+        var el = svg.querySelector(sel);
+        if (!el) return;
+        var classes = el.getAttribute('class').split(/\s+/).filter(function (c) {
+            return c && c.indexOf('cond-') !== 0;
+        });
+        if (condition) classes.push('cond-' + condition);
+        el.setAttribute('class', classes.join(' '));
+    }
+
+    function applyWholeOverlay(tooth, condition) {
+        var existing = svg.querySelector('.tooth-whole-overlay[data-tooth="' + tooth + '"]');
+        if (existing) existing.parentNode.removeChild(existing);
+        if (!condition) return;
+
+        var toothG = svg.querySelector('g.tooth[data-tooth="' + tooth + '"]');
+        if (!toothG) return;
+        var x = parseFloat(toothG.getAttribute('data-x'));
+        var isUpper = toothG.getAttribute('data-is-upper') === '1';
+        var y = isUpper ? UP_ROOT_Y : LO_TOOTH_Y;
+        var totalH = ROOT_H + TOOTH_H;
+
+        var overlay = svgEl('rect', {
+            'class': 'tooth-whole-overlay cond-' + condition,
+            'data-tooth': tooth, 'data-surface': 'whole',
+            x: x - 1, y: y - 1,
+            width: TOOTH_W + 2, height: totalH + 2,
+            rx: 4, ry: 4
+        });
+        var label = toothG.querySelector('text.tooth-label');
+        if (label) toothG.insertBefore(overlay, label);
+        else       toothG.appendChild(overlay);
+    }
+
+    function applyAll() {
+        Object.keys(DATA).forEach(function (key) {
+            var dash = key.indexOf('-');
+            if (dash < 0) return;
+            var tooth = key.substring(0, dash);
+            var surface = key.substring(dash + 1);
+            var cond = DATA[key].condition;
+            if (surface === 'whole') {
+                applyWholeOverlay(tooth, cond);
+            } else {
+                applySurfaceCondition(tooth, surface, cond);
+            }
+        });
+    }
+    applyAll();
+
+    // ---------- Legend ----------
+    var legend = document.getElementById('dentalLegend');
+    CONDITIONS.forEach(function (c) {
+        var item = document.createElement('span');
+        item.className = 'dental-legend-item';
+        item.innerHTML =
+            '<span class="dental-legend-swatch" style="background:' + (CONDITION_COLORS[c.code] || '#fff') + '"></span>' +
+            '<span>' + c.label + '</span>';
+        legend.appendChild(item);
+    });
+
+    // ---------- Picker popup ----------
+    var overlay  = document.getElementById('dentalPickerOverlay');
+    var grid     = document.getElementById('dentalConditionGrid');
+    var titleEl  = document.getElementById('dentalPickerTitle');
+    var subEl    = document.getElementById('dentalPickerSub');
+    var noteEl   = document.getElementById('dentalPickerNote');
+    var saveBtn  = document.getElementById('dentalPickerSave');
+    var clearBtn = document.getElementById('dentalPickerClear');
+    var cancelBtn= document.getElementById('dentalPickerCancel');
+
+    var pickerState = { tooth: null, surface: null, selectedCondition: '' };
+
+    function openPicker(tooth, surface) {
+        pickerState.tooth   = tooth;
+        pickerState.surface = surface;
+        var key = tooth + '-' + surface;
+        var existing = DATA[key] || { condition: '', note: '' };
+        // Whole-tooth defaults to "missing" if nothing is set yet
+        pickerState.selectedCondition = existing.condition || (surface === 'whole' ? 'missing' : '');
+        noteEl.value = existing.note || '';
+
+        var surfaceName = SURFACE_LABELS[surface] || surface;
+        titleEl.textContent = 'السن ' + tooth + ' — ' + surfaceName;
+        subEl.textContent = (surface === 'whole')
+            ? 'تمييز السن بأكمله (مثلاً: مفقود، خلع، زرعة).'
+            : 'اختر الحالة لهذا السطح ثم اضغط حفظ.';
+
+        grid.innerHTML = '';
+        CONDITIONS.forEach(function (c) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'dental-condition-btn' + (c.code === pickerState.selectedCondition ? ' selected' : '');
+            btn.dataset.code = c.code;
+            btn.innerHTML =
+                '<span class="dental-condition-dot" style="background:' + (CONDITION_COLORS[c.code] || '#fff') + '"></span>' +
+                '<span>' + c.label + '</span>';
+            btn.addEventListener('click', function () {
+                pickerState.selectedCondition = c.code;
+                grid.querySelectorAll('.dental-condition-btn').forEach(function (b) {
+                    b.classList.toggle('selected', b.dataset.code === c.code);
+                });
+            });
+            grid.appendChild(btn);
+        });
+
+        overlay.classList.add('show');
+    }
+
+    function closePicker() {
+        overlay.classList.remove('show');
+        pickerState = { tooth: null, surface: null, selectedCondition: '' };
+    }
+
+    overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closePicker();
+    });
+    cancelBtn.addEventListener('click', closePicker);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && overlay.classList.contains('show')) closePicker();
+    });
+
+    // ---------- Save / Clear ----------
+    function sendUpdate(tooth, surface, condition, note) {
+        return fetch(SAVE_URL, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF
+            },
+            body: JSON.stringify({
+                tooth_number: tooth,
+                surface: surface,
+                condition: condition,
+                note: note || ''
+            })
+        }).then(function (r) {
+            // Surface useful info for diagnostics if status is non-OK
+            if (!r.ok) {
+                console.error('Dental chart save failed', r.status, r.statusText, 'URL:', SAVE_URL);
+                return r.text().then(function (txt) {
+                    return { ok: false, status: r.status, error: txt.slice(0, 200) };
+                });
+            }
+            return r.json();
+        });
+    }
+
+    saveBtn.addEventListener('click', function () {
+        if (!pickerState.tooth || !pickerState.surface) return;
+        var t = pickerState.tooth, s = pickerState.surface;
+        var cond = pickerState.selectedCondition;
+        var note = noteEl.value.trim();
+        saveBtn.disabled = true;
+        sendUpdate(t, s, cond, note).then(function (res) {
+            saveBtn.disabled = false;
+            if (!res || !res.ok) {
+                alert('تعذر الحفظ. ' + (res && res.status ? '(HTTP ' + res.status + ')' : '') + ' — افتح وحدة تحكم المتصفح لمزيد من التفاصيل.');
+                return;
+            }
+            var key = t + '-' + s;
+            if (cond) {
+                DATA[key] = { condition: cond, note: note };
+                if (s === 'whole') applyWholeOverlay(t, cond);
+                else applySurfaceCondition(t, s, cond);
+            } else {
+                delete DATA[key];
+                if (s === 'whole') applyWholeOverlay(t, '');
+                else applySurfaceCondition(t, s, '');
+            }
+            closePicker();
+        }).catch(function () {
+            saveBtn.disabled = false;
+            alert('فشل الاتصال بالخادم.');
+        });
+    });
+
+    clearBtn.addEventListener('click', function () {
+        if (!pickerState.tooth || !pickerState.surface) return;
+        var t = pickerState.tooth, s = pickerState.surface;
+        clearBtn.disabled = true;
+        sendUpdate(t, s, '', '').then(function (res) {
+            clearBtn.disabled = false;
+            if (!res || !res.ok) { alert('تعذر المسح.'); return; }
+            delete DATA[t + '-' + s];
+            if (s === 'whole') applyWholeOverlay(t, '');
+            else applySurfaceCondition(t, s, '');
+            closePicker();
+        }).catch(function () {
+            clearBtn.disabled = false;
+            alert('فشل الاتصال بالخادم.');
+        });
+    });
+
+    // ---------- Click delegation on the SVG ----------
+    svg.addEventListener('click', function (e) {
+        var target = e.target;
+        if (!target || !target.getAttribute) return;
+        var tooth = target.getAttribute('data-tooth');
+        var surface = target.getAttribute('data-surface');
+        if (!tooth || !surface) return;
+        openPicker(tooth, surface);
+    });
+})();
+</script>

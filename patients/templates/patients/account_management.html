@@ -1,0 +1,275 @@
+{% extends 'patients/base.html' %}
+{% load static %}
+
+{% block title %}إدارة الحساب | عيادتك{% endblock %}
+
+{% block content %}
+<style>
+    .account-wrap {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .account-header {
+        margin-bottom: 24px;
+    }
+    .account-header h1 {
+        margin: 0;
+        font-size: 28px;
+        color: #1a3d28;
+        font-weight: 800;
+    }
+    .account-header p {
+        margin: 6px 0 0 0;
+        color: #5a8a6a;
+        font-size: 14px;
+    }
+
+    .account-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 22px;
+    }
+    @media (max-width: 900px) {
+        .account-grid { grid-template-columns: 1fr; }
+    }
+
+    .account-card {
+        background: white;
+        border: 1px solid #d0e4d5;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 15px rgba(26, 107, 60, 0.06);
+    }
+
+    .account-card h2 {
+        margin: 0 0 18px 0;
+        font-size: 18px;
+        color: #1a3d28;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Subscription status block */
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 13px;
+    }
+    .status-active   { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .status-expired  { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    .status-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px dashed #e8ede9;
+        font-size: 14px;
+    }
+    .status-row:last-of-type { border-bottom: none; }
+    .status-row .label { color: #5a8a6a; font-weight: 600; }
+    .status-row .value { color: #1a1a2e; font-weight: 700; }
+
+    .renew-banner {
+        margin-top: 18px;
+        padding: 14px 16px;
+        background: linear-gradient(135deg, #fef3c7, #fde68a);
+        border: 1px solid #fcd34d;
+        border-radius: 10px;
+        color: #78350f;
+        font-size: 13px;
+        line-height: 1.7;
+    }
+
+    .renew-banner.success {
+        background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+        border-color: #bbf7d0;
+        color: #166534;
+    }
+
+    .renew-banner a.btn {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 8px 18px;
+        background: #1a6b3c;
+        color: white;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 13px;
+    }
+    .renew-banner a.btn:hover { background: #145c32; }
+
+    /* Password form */
+    .pw-row { margin-bottom: 14px; }
+    .pw-row label {
+        display: block;
+        font-size: 13px;
+        color: #2d5a3d;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+    .pw-row input {
+        width: 100%;
+        padding: 11px 14px;
+        border: 1px solid #c5deca;
+        border-radius: 8px;
+        font-size: 14px;
+        background: #fcfdfc;
+        font-family: inherit;
+        box-sizing: border-box;
+    }
+    .pw-row input:focus {
+        outline: none;
+        border-color: #1a6b3c;
+        box-shadow: 0 0 0 3px rgba(26, 107, 60, 0.15);
+        background: white;
+    }
+    .pw-msg {
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 14px;
+    }
+    .pw-msg.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .pw-msg.error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+    /* Account info block */
+    .info-block {
+        background: #f8fbf9;
+        border: 1px solid #e1ece5;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
+    }
+    .info-block .info-line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        padding: 4px 0;
+    }
+    .info-block .info-line .k { color: #5a8a6a; font-weight: 600; }
+    .info-block .info-line .v { color: #1a1a2e; font-weight: 700; }
+</style>
+
+<div class="account-wrap">
+    <div class="account-header">
+        <h1><i class="fa-solid fa-user-gear"></i> إدارة الحساب</h1>
+        <p>قم بإدارة بياناتك الشخصية، تغيير كلمة المرور، ومراجعة حالة الاشتراك.</p>
+    </div>
+
+    <div class="account-grid">
+
+        {# ─── Subscription status card ──────────────────────────────── #}
+        <div class="account-card">
+            <h2><i class="fa-solid fa-calendar-check"></i> حالة الاشتراك</h2>
+
+            <div class="info-block">
+                {% if clinic %}
+                <div class="info-line"><span class="k">العيادة:</span><span class="v">{{ clinic.name }}</span></div>
+                <div class="info-line"><span class="k">رقم العيادة:</span><span class="v">{{ clinic.clinic_number|default:"—" }}</span></div>
+                <div class="info-line"><span class="k">التخصص:</span><span class="v">{{ clinic.specialty_type|default:clinic.get_specialty_display }}</span></div>
+                {% else %}
+                <div class="info-line"><span class="k">العيادة:</span><span class="v">—</span></div>
+                {% endif %}
+            </div>
+
+            <div class="status-row">
+                <span class="label">الحالة الحالية:</span>
+                <span class="value">
+                    {% if sub_status.is_active %}
+                    <span class="status-pill status-active"><i class="fa-solid fa-circle-check"></i> نشط</span>
+                    {% else %}
+                    <span class="status-pill status-expired"><i class="fa-solid fa-circle-exclamation"></i> منتهي</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="status-row">
+                <span class="label">نوع الباقة:</span>
+                <span class="value">{{ sub_status.period_label|default:"غير محدد" }}</span>
+            </div>
+            {% if sub_status.end_date %}
+            <div class="status-row">
+                <span class="label">تاريخ الانتهاء:</span>
+                <span class="value">{{ sub_status.end_date|date:"Y-m-d" }}</span>
+            </div>
+            {% endif %}
+            {% if sub_status.is_active %}
+            <div class="status-row">
+                <span class="label">الأيام المتبقية:</span>
+                <span class="value">{{ sub_status.days_left }} يوم</span>
+            </div>
+            {% endif %}
+
+            {% if sub_status.is_active %}
+                {% if sub_status.days_left <= 7 %}
+                <div class="renew-banner">
+                    <i class="fa-solid fa-bell"></i> اشتراكك يقترب من الانتهاء — يمكنك تجديد الاشتراك من خلال صفحة الباقات.
+                    <br>
+                    <a href="{% url 'pricing' %}" class="btn"><i class="fa-solid fa-arrows-rotate"></i> عرض الباقات والتجديد</a>
+                </div>
+                {% else %}
+                <div class="renew-banner success">
+                    <i class="fa-solid fa-circle-check"></i> اشتراكك نشط. لتجديد الاشتراك أو ترقيته، يمكنك الاطلاع على الباقات المتاحة.
+                    <br>
+                    <a href="{% url 'pricing' %}" class="btn"><i class="fa-solid fa-tags"></i> عرض الباقات</a>
+                </div>
+                {% endif %}
+            {% else %}
+            <div class="renew-banner">
+                <i class="fa-solid fa-triangle-exclamation"></i> اشتراك العيادة منتهي. لتجديد الاشتراك ومتابعة استخدام النظام، يرجى اختيار باقة من الصفحة المخصصة.
+                <br>
+                <a href="{% url 'pricing' %}" class="btn"><i class="fa-solid fa-arrows-rotate"></i> تجديد الاشتراك</a>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ─── Change password card ─────────────────────────────────── #}
+        <div class="account-card">
+            <h2><i class="fa-solid fa-lock"></i> تغيير كلمة المرور</h2>
+
+            <div class="info-block">
+                <div class="info-line"><span class="k">اسم المستخدم:</span><span class="v">{{ request.user.username }}</span></div>
+                <div class="info-line"><span class="k">الاسم:</span><span class="v">{{ request.user.first_name }} {{ request.user.last_name }}</span></div>
+                <div class="info-line"><span class="k">البريد:</span><span class="v">{{ request.user.email|default:"—" }}</span></div>
+                <div class="info-line"><span class="k">الدور:</span><span class="v">{{ role_name|default:"—" }}</span></div>
+            </div>
+
+            {% if password_message %}
+            <div class="pw-msg success"><i class="fa-solid fa-circle-check"></i> {{ password_message }}</div>
+            {% endif %}
+            {% if password_error %}
+            <div class="pw-msg error"><i class="fa-solid fa-triangle-exclamation"></i> {{ password_error }}</div>
+            {% endif %}
+
+            <form method="post" autocomplete="off">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="change_password">
+
+                <div class="pw-row">
+                    <label>كلمة المرور الحالية</label>
+                    <input type="password" name="current_password" required>
+                </div>
+                <div class="pw-row">
+                    <label>كلمة المرور الجديدة</label>
+                    <input type="password" name="new_password" required minlength="6">
+                </div>
+                <div class="pw-row">
+                    <label>تأكيد كلمة المرور الجديدة</label>
+                    <input type="password" name="new_password_confirm" required minlength="6">
+                </div>
+
+                <button type="submit" class="btn-submit" style="width:100%; justify-content:center;">
+                    <i class="fa-solid fa-floppy-disk"></i> حفظ كلمة المرور الجديدة
+                </button>
+            </form>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

@@ -14,17 +14,12 @@
 </div>
 
 <div class="controls-card">
-    <form method="get" class="search-row">
-        <input type="text" name="q" class="search-input" placeholder="ابحث بالاسم، الهاتف، أو رقم الملف..." value="{{ query|default:'' }}">
-        <button type="submit" class="btn-submit">البحث</button>
-    </form>
-
     <div class="filters-row">
         <span class="filter-label">تصفية حسب الحالة:</span>
-        <a href="?q={{ query }}&filter=" class="filter-chip {% if not filter_type %}active{% endif %}">الكل</a>
-        <a href="?q={{ query }}&filter=pending" class="filter-chip {% if filter_type == 'pending' %}active{% endif %}">زيارات معلقة</a>
-        <a href="?q={{ query }}&filter=completed" class="filter-chip {% if filter_type == 'completed' %}active{% endif %}">زيارات مكتملة</a>
-        <a href="?q={{ query }}&filter=none" class="filter-chip {% if filter_type == 'none' %}active{% endif %}">بدون زيارات</a>
+        <a href="?filter=" class="filter-chip {% if not filter_type %}active{% endif %}">الكل</a>
+        <a href="?filter=pending" class="filter-chip {% if filter_type == 'pending' %}active{% endif %}">زيارات معلقة</a>
+        <a href="?filter=completed" class="filter-chip {% if filter_type == 'completed' %}active{% endif %}">زيارات مكتملة</a>
+        <a href="?filter=none" class="filter-chip {% if filter_type == 'none' %}active{% endif %}">بدون زيارات</a>
     </div>
 </div>
 
@@ -56,7 +51,7 @@
         </a>
     {% empty %}
         <div class="empty-state">
-            <div style="font-size: 40px; margin-bottom: 15px;">🔍</div>
+            <div style="font-size: 40px; margin-bottom: 15px;"><i class="fa-solid fa-magnifying-glass"></i></div>
             <div style="font-weight: bold; color: #1e293b; margin-bottom: 8px;">لا يوجد مرضى مطابقون للبحث</div>
             <div>جرب استخدام كلمات مفتاحية أخرى أو إلغاء علامات التصفية.</div>
         </div>
@@ -65,8 +60,8 @@
 
 <div class="pagination-wrapper">
     {% if patients_with_status.has_previous %}
-        <a class="btn-cancel" href="?q={{ query }}&filter={{ filter_type }}&page=1">الأولى</a>
-        <a class="btn-cancel" href="?q={{ query }}&filter={{ filter_type }}&page={{ patients_with_status.previous_page_number }}">السابق</a>
+        <a class="btn-cancel" href="?filter={{ filter_type }}&page=1">الأولى</a>
+        <a class="btn-cancel" href="?filter={{ filter_type }}&page={{ patients_with_status.previous_page_number }}">السابق</a>
     {% endif %}
 
     <div class="page-info">
@@ -74,8 +69,8 @@
     </div>
 
     {% if patients_with_status.has_next %}
-        <a class="btn-cancel" href="?q={{ query }}&filter={{ filter_type }}&page={{ patients_with_status.next_page_number }}">التالي</a>
-        <a class="btn-cancel" href="?q={{ query }}&filter={{ filter_type }}&page={{ patients_with_status.paginator.num_pages }}">الأخيرة</a>
+        <a class="btn-cancel" href="?filter={{ filter_type }}&page={{ patients_with_status.next_page_number }}">التالي</a>
+        <a class="btn-cancel" href="?filter={{ filter_type }}&page={{ patients_with_status.paginator.num_pages }}">الأخيرة</a>
     {% endif %}
 </div>
 

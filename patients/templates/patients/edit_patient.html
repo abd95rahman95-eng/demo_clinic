@@ -7,21 +7,21 @@
 
 <div class="patient-view-wrapper">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-        <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;">تعديل بيانات المريض: {{ patient.name }}</h1>
+        <h1 style="margin: 0; font-size: 28px; color: #1a3d28; font-weight: 800;"><i class="fa-solid fa-user-pen"></i> تعديل بيانات المريض: {{ patient.name }}</h1>
     </div>
 
     <div class="ui-form-card">
-        <form method="post">
+        <form method="post" data-offline data-offline-key="edit_patient_{{ patient.id }}">
             {% csrf_token %}
 
             {% if form.errors %}
                 <div class="error-card">
-                    <h3>⚠️ يوجد خطأ في البيانات</h3>
+                    <h3><i class="fa-solid fa-triangle-exclamation"></i> يوجد خطأ في البيانات</h3>
                     {{ form.errors }}
                 </div>
             {% endif %}
 
-            <div class="section-title">بيانات المريض الأساسية</div>
+            <div class="section-title"><i class="fa-solid fa-id-card"></i> بيانات المريض الأساسية</div>
 
             <div class="form-grid-layout">
                 <div class="form-group">
@@ -51,8 +51,8 @@
             </div>
 
             <div class="form-actions">
-                <button type="submit" class="btn-submit">حفظ التعديلات</button>
-                <a href="{% url 'patient_detail' patient.id %}" class="btn-cancel">إلغاء</a>
+                <button type="submit" class="btn-submit"><i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات</button>
+                <a href="{% url 'patient_detail' patient.id %}" class="btn-cancel"><i class="fa-solid fa-xmark"></i> إلغاء</a>
             </div>
         </form>
     </div>

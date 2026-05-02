@@ -4,8 +4,29 @@
 
 <head>
     <meta charset="UTF-8">
-    <link rel="icon" type="image/png" href="{% static 'patients/images/logo.png' %}">
-    <title>{% block title %}نظام العيادة{% endblock %}</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <link rel="icon" type="image/png" href="{% static 'patients/images/favicon.png' %}">
+    <title>{% block title %}عيادتك{% endblock %}</title>
+
+    {%comment%} ─── PWA / mobile-app metadata ──────────────────────────────────────
+       Together with /manifest.webmanifest and /service-worker.js this lets
+       the site be installed to the home screen on Android/iOS and wrapped
+       by Capacitor for the App Store / Play Store builds. {%endcomment%}
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#1a6b3c">
+    <meta name="application-name" content="عيادتك">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="عيادتك">
+    <link rel="apple-touch-icon" href="{% static 'patients/images/logo.png' %}">
+
+    {# Font Awesome 6 — solid + brands (used across the whole app for icons) #}
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+          integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -32,6 +53,475 @@
             text-decoration: none;
             margin-left: 15px;
             font-weight: bold;
+            transition: color 0.15s ease;
+        }
+
+        .navbar a:hover {
+            color: #b9a779;
+        }
+
+        /* Active link — highlighted in gold to show current page */
+        .navbar a.active,
+        .navbar .nav-dropdown-toggle.active {
+            color: #b9a779;
+        }
+
+        /* Logo on the right of the navbar — sized to fit within the
+           existing navbar height (15px top/bottom padding) so it does
+           NOT expand the bar. */
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 92px; /* pushes the user name slightly toward the center */
+        }
+
+        .nav-logo {
+            height: 38px;          /* fits within the navbar without growing it */
+            width: auto;
+            display: block;
+            flex-shrink: 0;
+        }
+
+        /* Dropdown menu inside the navbar (Patients group) */
+        .nav-dropdown {
+            position: relative;
+            display: inline-block;
+            margin-left: 15px;
+        }
+
+        .nav-dropdown-toggle {
+            background: none;
+            border: none;
+            color: white;
+            font-weight: bold;
+            font-family: inherit;
+            font-size: inherit;
+            cursor: pointer;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: color 0.15s ease;
+        }
+
+        .nav-dropdown-toggle:hover {
+            color: #b9a779;
+        }
+
+        .nav-dropdown-toggle .caret {
+            font-size: 10px;
+            transition: transform 0.2s ease;
+        }
+
+        .nav-dropdown.open .nav-dropdown-toggle .caret {
+            transform: rotate(180deg);
+        }
+
+        /* Generic icon spacing — keep FA icons visually balanced with text */
+        .navbar a i.fa-solid,
+        .navbar a i.fa-brands,
+        .nav-dropdown-toggle i.fa-solid,
+        .nav-dropdown-menu a i.fa-solid {
+            margin-left: 4px;
+            font-size: 13px;
+            opacity: 0.95;
+        }
+
+        /* ─── Burger menu (responsive ≤1000px) ────────────────────────── */
+        .nav-burger {
+            display: none;     /* hidden on desktop, shown via media query */
+            background: rgba(255, 255, 255, 0.12);
+            border: 1.5px solid rgba(255, 255, 255, 0.45);
+            color: white;
+            border-radius: 10px;
+            width: 42px;
+            height: 42px;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0;
+            transition: background-color 0.15s ease, color 0.15s ease;
+        }
+        .nav-burger:hover {
+            background: white;
+            color: #1a6b3c;
+            border-color: white;
+        }
+
+        /* Default (desktop) — collapsible group is just a flex contents row */
+        .navbar-collapsible {
+            display: contents;
+        }
+
+        @media (max-width: 1000px) {
+            /* Show the burger toggle */
+            .nav-burger { display: inline-flex; align-items: center; justify-content: center; }
+
+            /* Convert the navbar into a relative container so the dropdown
+               panel can position absolute beneath it. */
+            .navbar { flex-wrap: wrap; position: sticky; }
+
+            /* Hide the collapsible items by default; toggle .open to reveal */
+            .navbar-collapsible {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: linear-gradient(135deg, #145c32, #1a6b3c);
+                padding: 14px 18px;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+                flex-direction: column;
+                gap: 6px;
+                z-index: 1050;
+                border-top: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            .navbar-collapsible.open {
+                display: flex;
+            }
+
+            /* Search bar takes full width when stacked */
+            .navbar-collapsible .navbar-search {
+                flex: 0 0 auto;
+                max-width: none;
+                margin-bottom: 8px;
+            }
+
+            /* Nav links + dropdowns stack vertically */
+            .navbar-collapsible > div:last-child {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                align-items: stretch;
+            }
+            .navbar-collapsible > div:last-child > a,
+            .navbar-collapsible > div:last-child > .nav-dropdown,
+            .navbar-collapsible > div:last-child > .nav-bell-wrap {
+                margin: 0;
+                width: 100%;
+            }
+            .navbar-collapsible > div:last-child > a {
+                padding: 10px 12px;
+                border-radius: 8px;
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            .navbar-collapsible > div:last-child > a:hover {
+                background: rgba(255, 255, 255, 0.16);
+            }
+
+            /* Dropdown menu inside collapsible: render inline (no abs popup) */
+            .navbar-collapsible .nav-dropdown { width: 100%; }
+            .navbar-collapsible .nav-dropdown-toggle {
+                width: 100%;
+                padding: 10px 12px;
+                border-radius: 8px;
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                justify-content: space-between;
+            }
+            .navbar-collapsible .nav-dropdown-menu {
+                position: static;
+                box-shadow: none;
+                margin: 4px 0 0;
+                background: rgba(255, 255, 255, 0.92);
+            }
+
+            /* Bell rendered as a normal row inside the burger panel */
+            .navbar-collapsible .nav-bell {
+                width: 100%;
+                height: auto;
+                border-radius: 8px;
+                padding: 10px 12px;
+                justify-content: flex-start;
+                gap: 8px;
+            }
+            .navbar-collapsible .nav-bell::after {
+                content: 'الإشعارات';
+                font-weight: 700;
+                margin-right: 6px;
+            }
+            .navbar-collapsible .nav-bell-menu {
+                position: static;
+                margin-top: 6px;
+                box-shadow: none;
+                width: 100%;
+                max-width: none;
+            }
+        }
+
+        .nav-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 10px);
+            right: 0;
+            background: #ffffff;
+            color: #1a3d28;
+            min-width: 180px;
+            border-radius: 8px;
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.18);
+            padding: 6px 0;
+            display: none;
+            z-index: 1100;
+        }
+
+        .nav-dropdown.open .nav-dropdown-menu {
+            display: block;
+        }
+
+        .nav-dropdown-menu a {
+            display: block;
+            color: #1a3d28;
+            margin: 0;
+            padding: 10px 16px;
+            font-weight: 600;
+            white-space: nowrap;
+            transition: background-color 0.15s ease, color 0.15s ease;
+        }
+
+        .nav-dropdown-menu a:hover {
+            background: #f1f5f3;
+            color: #1a6b3c;
+        }
+
+        .nav-dropdown-menu a.active {
+            background: #f6f1e0;
+            color: #b9a779;
+        }
+
+        /* ---------- Navbar live search ---------- */
+        .navbar-search {
+            position: relative;
+            flex: 0 1 360px;
+            max-width: 360px;
+        }
+
+        .navbar-search-input {
+            width: 100%;
+            padding: 8px 14px 8px 36px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            font-family: inherit;
+            font-size: 14px;
+            box-sizing: border-box;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .navbar-search-input::placeholder {
+            color: rgba(255, 255, 255, 0.75);
+        }
+        .navbar-search-input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.95);
+            color: #1a3d28;
+            border-color: #b9a779;
+        }
+        .navbar-search-input:focus::placeholder {
+            color: #6b7280;
+        }
+        .navbar-search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.85);
+            pointer-events: none;
+        }
+        .navbar-search-input:focus + .navbar-search-icon {
+            color: #1a6b3c;
+        }
+
+        .navbar-search-results {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            right: 0;
+            background: #ffffff;
+            color: #1a3d28;
+            border-radius: 10px;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+            padding: 6px 0;
+            display: none;
+            max-height: 360px;
+            overflow-y: auto;
+            z-index: 1100;
+        }
+        .navbar-search-results.show {
+            display: block;
+        }
+        .navbar-search-results .search-result {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            text-decoration: none;
+            color: #1a3d28;
+            margin: 0;
+            font-weight: 500;
+            border-bottom: 1px solid #f1f5f3;
+            transition: background-color 0.12s ease;
+        }
+        .navbar-search-results .search-result:last-child {
+            border-bottom: none;
+        }
+        .navbar-search-results .search-result:hover,
+        .navbar-search-results .search-result.is-active {
+            background: #f6f1e0;
+            color: #1a3d28;
+        }
+        .navbar-search-results .search-result .name {
+            font-weight: 700;
+        }
+        .navbar-search-results .search-result .meta {
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .navbar-search-results .no-results,
+        .navbar-search-results .loading {
+            padding: 14px 16px;
+            text-align: center;
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        /* ---------- Outlined logout button (kept for back-compat) ---------- */
+        .btn-logout {
+            border: 1.5px solid rgba(255, 255, 255, 0.85);
+            border-radius: 999px;
+            padding: 6px 16px;
+            margin-left: 0;
+            color: white !important;
+            transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        }
+        .btn-logout:hover {
+            background: white;
+            color: #1a6b3c !important;
+            border-color: white;
+        }
+
+        /* ---------- Notification bell (leftmost item in RTL navbar) ---------- */
+        .nav-bell {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(255, 255, 255, 0.6);
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+            cursor: pointer;
+            margin-right: 12px;
+            transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+            font-family: inherit;
+            padding: 0;
+        }
+        .nav-bell:hover {
+            background: white;
+            color: #1a6b3c;
+            border-color: white;
+        }
+        .nav-bell .bell-icon {
+            font-size: 16px;
+            line-height: 1;
+        }
+        .nav-bell .nav-bell-badge {
+            position: absolute;
+            top: -4px;
+            left: -4px;
+            background: #b02a37;
+            color: white;
+            border: 2px solid #1a6b3c;
+            border-radius: 999px;
+            min-width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 0 5px;
+            box-sizing: border-box;
+            animation: badge-pulse 1.6s ease-out infinite;
+        }
+        .nav-bell-wrap {
+            position: relative;
+            display: inline-block;
+            margin-right: 4px;
+        }
+        .nav-bell-menu {
+            position: absolute;
+            top: calc(100% + 10px);
+            left: 0;
+            background: #ffffff;
+            color: #1a3d28;
+            min-width: 280px;
+            max-width: 320px;
+            border-radius: 10px;
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.18);
+            padding: 0;
+            display: none;
+            z-index: 1100;
+            overflow: hidden;
+        }
+        .nav-bell-wrap.open .nav-bell-menu { display: block; }
+        .nav-bell-header {
+            background: linear-gradient(135deg, #1a6b3c, #2e8b57);
+            color: white;
+            padding: 12px 16px;
+            font-weight: 700;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-bell-list {
+            max-height: 320px;
+            overflow-y: auto;
+            padding: 6px 0;
+        }
+        .nav-bell-empty {
+            padding: 24px 16px;
+            text-align: center;
+            color: #6b7280;
+            font-size: 13px;
+        }
+        .nav-bell-item {
+            display: block;
+            padding: 10px 16px;
+            border-bottom: 1px solid #f1f5f3;
+            text-decoration: none;
+            color: #1a3d28;
+            font-size: 13px;
+        }
+        .nav-bell-item:last-child { border-bottom: none; }
+        .nav-bell-item:hover { background: #f5faf6; }
+        .nav-bell-item .nb-title { font-weight: 700; margin-bottom: 2px; }
+        .nav-bell-item .nb-meta  { font-size: 11px; color: #6b7280; }
+        .nav-bell-footer {
+            border-top: 1px solid #eef4ef;
+            padding: 10px 16px;
+            text-align: center;
+            background: #f8fbf9;
+        }
+        .nav-bell-footer a {
+            color: #1a6b3c;
+            font-weight: 700;
+            font-size: 13px;
+            text-decoration: none;
+            margin: 0;
+        }
+        .nav-bell-footer a:hover { text-decoration: underline; }
+
+        /* ---------- Badge pulse animation ---------- */
+        @keyframes badge-pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(176, 42, 55, 0.55); }
+            70%  { box-shadow: 0 0 0 8px rgba(176, 42, 55, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(176, 42, 55, 0); }
         }
 
         .dashboard-grid {
@@ -327,7 +817,7 @@
         }
         .first-in-line .queue-number-badge { background: #1a6b3c; color: white; }
         .patient-name { font-size: 20px; color: #1e293b; margin: 0 0 16px 0; font-weight: 800; display: flex; align-items: center; gap: 8px; }
-        .patient-name::before { content: '👤'; font-size: 18px; }
+        .patient-name::before { content: '\f007'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 16px; color: #1a6b3c; }
         .card-body { display: flex; flex-direction: column; gap: 10px; flex-grow: 1; }
         .info-row { display: flex; align-items: flex-start; font-size: 13px; color: #475569; line-height: 1.4; }
         .info-row strong { color: #0f172a; min-width: 85px; font-weight: 600; }
@@ -369,7 +859,7 @@
         .patient-card-modern.patient-pending   { background: linear-gradient(135deg, #fefce8, #fef08a); border-color: #fde047; }
         .patient-card-modern.patient-none      { background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-color: #e2e8f0; }
         .patient-card-modern h2 { font-size: 20px; color: #1e293b; margin: 0 0 16px 0; font-weight: 800; display: flex; align-items: center; gap: 8px; }
-        .patient-card-modern h2::before { content: '👤'; font-size: 18px; }
+        .patient-card-modern h2::before { content: '\f007'; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 16px; color: #1a6b3c; }
         .patient-card-body { display: flex; flex-direction: column; gap: 10px; flex-grow: 1; }
         .patient-info-row { display: flex; align-items: flex-start; font-size: 13px; color: #475569; line-height: 1.4; }
         .patient-info-row strong { color: #0f172a; min-width: 65px; font-weight: 600; }
@@ -587,6 +1077,7 @@
             font-weight: bold;
             margin-right: 6px;
             vertical-align: middle;
+            animation: badge-pulse 1.6s ease-out infinite;
         }
         .clinic-header-card {
             background: linear-gradient(135deg, #1a6b3c 0%, #0d3d22 100%);
@@ -888,50 +1379,129 @@
 <body>
 
     <div class="navbar">
-        <div>
-            <span class="user-info" style="margin-left: 15px;">
-                {% if request.user.groups.all.0.name == "Doctor" %}
-                🩺 د.
-                {% elif request.user.groups.all.0.name == "Nurse" %}
-                🥼 ممرضة
-                {% endif %}
-
-                {{ request.user.first_name }} {{ request.user.last_name }}
-            </span>
+        <div class="navbar-right">
+            <img src="{% static 'patients/images/nav_logo.png' %}" alt="logo" class="nav-logo">
         </div>
+
+        {% comment %} Burger toggle — only visible on screens ≤1000px (CSS controlled).
+           When toggled, the .navbar-collapsible group switches to a vertical
+           panel that slides down under the navbar. {% endcomment %}
+        {% if request.user.is_authenticated %}
+        <button type="button" id="navBurger" class="nav-burger" aria-label="القائمة" aria-expanded="false">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        {% endif %}
+
+        {% if request.user.is_authenticated %}
+        <div class="navbar-collapsible" id="navCollapsible">
+            <div class="navbar-search" id="navbarSearch">
+                <input type="text"
+                       class="navbar-search-input"
+                       id="navbarSearchInput"
+                       placeholder="ابحث عن مريض بالاسم، الهاتف، أو رقم الملف..."
+                       autocomplete="off">
+                <div class="navbar-search-results" id="navbarSearchResults"></div>
+            </div>
+        {% endif %}
 
         <div>
             {% if request.user.is_authenticated %}
-            <a href="{% url 'dashboard' %}">الصفحة الرئيسية </a>
-            <span style="margin-left: 15px;">|</span>
-            <a href="{% url 'patient_list' %}">المرضى</a>
+            {% with current=request.resolver_match.url_name %}
+            <a href="{% url 'dashboard' %}"
+               class="{% if current == 'dashboard' %}active{% endif %}"><i class="fa-solid fa-house"></i> الصفحة الرئيسية</a>
+
+            {# Patients dropdown: list + add patient grouped together #}
+            <div class="nav-dropdown {% if current == 'patient_list' or current == 'add_patient' or current == 'patient_detail' %}is-current{% endif %}">
+                <button type="button"
+                        class="nav-dropdown-toggle {% if current == 'patient_list' or current == 'add_patient' or current == 'patient_detail' %}active{% endif %}">
+                    <i class="fa-solid fa-users"></i>
+                    المرضى <i class="fa-solid fa-chevron-down caret"></i>
+                </button>
+                <div class="nav-dropdown-menu">
+                    <a href="{% url 'patient_list' %}"
+                       class="{% if current == 'patient_list' %}active{% endif %}"><i class="fa-solid fa-list-ul"></i> قائمة المرضى</a>
+                    <a href="{% url 'add_patient' %}"
+                       class="{% if current == 'add_patient' %}active{% endif %}"><i class="fa-solid fa-user-plus"></i> إضافة مريض</a>
+                </div>
+            </div>
 
             {% if request.user.groups.all.0.name == "Nurse" %}
-            <a href="{% url 'add_patient' %}">إضافة مريض</a>
-
-
-            <a href="{% url 'waiting_list' %}">
-                قائمة الانتظار
+            <a href="{% url 'waiting_list' %}"
+               class="{% if current == 'waiting_list' %}active{% endif %}">
+                <i class="fa-solid fa-people-arrows"></i> قائمة الانتظار
                 {% if pending_visits_badge > 0 %}
                 <span class="badge">{{ pending_visits_badge }}</span>
                 {% endif %}
             </a>
             {% endif %}
             {% if request.user.groups.all.0.name == "Doctor" %}
-            <a href="{% url 'doctor_pending_visits' %}">
-                الزيارات المعلقة
+            <a href="{% url 'doctor_pending_visits' %}"
+               class="{% if current == 'doctor_pending_visits' %}active{% endif %}">
+                <i class="fa-solid fa-clipboard-list"></i> الزيارات المعلقة
                 {% if pending_visits_badge > 0 %}
                 <span class="badge">{{ pending_visits_badge }}</span>
                 {% endif %}
             </a>
             {% endif %}
 
-            <span style="margin-left: 15px;">|</span>
-            <a href="{% url 'logout' %}">تسجيل خروج</a>
+            {# ─── "المزيد" dropdown — replaces the old logout button ───────── #}
+            <div class="nav-dropdown {% if current == 'account_management' or current == 'contact_us' %}is-current{% endif %}">
+                <button type="button"
+                        class="nav-dropdown-toggle {% if current == 'account_management' or current == 'contact_us' %}active{% endif %}">
+                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                    المزيد <i class="fa-solid fa-chevron-down caret"></i>
+                </button>
+                <div class="nav-dropdown-menu">
+                    <a href="{% url 'account_management' %}"
+                       class="{% if current == 'account_management' %}active{% endif %}"><i class="fa-solid fa-user-gear"></i> ادارة الحساب</a>
+                    <a href="{% url 'contact_us' %}"
+                       class="{% if current == 'contact_us' %}active{% endif %}"><i class="fa-solid fa-envelope"></i> اتصل بنا!</a>
+                    <a href="{% url 'logout' %}"><i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج</a>
+                </div>
+            </div>
+
+            {# ─── Notification bell — sits at the very left of the navbar ─── #}
+            <div class="nav-bell-wrap" id="navBellWrap">
+                <button type="button" class="nav-bell" id="navBellBtn" aria-label="الإشعارات">
+                    <i class="fa-solid fa-bell bell-icon"></i>
+                    {% if notifications_badge and notifications_badge > 0 %}
+                    <span class="nav-bell-badge">{{ notifications_badge }}</span>
+                    {% endif %}
+                </button>
+                <div class="nav-bell-menu" id="navBellMenu">
+                    <div class="nav-bell-header">
+                        <span><i class="fa-solid fa-bell"></i> الإشعارات</span>
+                        {% if notifications_badge and notifications_badge > 0 %}
+                        <span style="background: rgba(255,255,255,0.25); border-radius: 999px; padding: 2px 8px; font-size: 11px;">{{ notifications_badge }} جديد</span>
+                        {% endif %}
+                    </div>
+                    <div class="nav-bell-list">
+                        {% if recent_notifications %}
+                        {% for n in recent_notifications %}
+                        <a href="{{ n.url|default:'#' }}" class="nav-bell-item">
+                            <div class="nb-title">{{ n.title }}</div>
+                            <div class="nb-meta">{{ n.meta }}</div>
+                        </a>
+                        {% endfor %}
+                        {% else %}
+                        <div class="nav-bell-empty">
+                            <i class="fa-solid fa-bell-slash"></i> لا توجد إشعارات جديدة حالياً
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="nav-bell-footer">
+                        <a href="#"><i class="fa-solid fa-list"></i> عرض كل الإشعارات</a>
+                    </div>
+                </div>
+            </div>
+            {% endwith %}
             {% else %}
             <a href="{% url 'login' %}">تسجيل الدخول</a>
             {% endif %}
         </div>
+        {% if request.user.is_authenticated %}
+        </div>{# /navbar-collapsible — only present for authenticated users #}
+        {% endif %}
     </div>
 
     <div class="container">
@@ -943,6 +1513,230 @@
 
         {% block content %}{% endblock %}
     </div>
+
+    {%comment%} Full-width footer slot — pages opt-in by overriding this block.
+       Lives OUTSIDE .container so the footer spans the whole viewport
+       like the navbar does, instead of being constrained to 85% width. {%endcomment%}
+    {% block footer %}{% endblock %}
+
+    {%comment%} Offline autosave + sync (IndexedDB-backed). The script auto-binds
+       to any <form data-offline> on the page and is a no-op otherwise. {%endcomment%}
+    <script src="{% static 'patients/js/clinic_offline.js' %}" defer></script>
+
+    {%comment%} Mobile / Capacitor helpers + service worker registration. {%endcomment%}
+    <script src="{% static 'patients/js/mobile_helpers.js' %}" defer></script>
+
+    <script>
+        // Burger toggle for the responsive (≤1000px) navbar collapse.
+        (function () {
+            var burger     = document.getElementById('navBurger');
+            var collapsible = document.getElementById('navCollapsible');
+            if (!burger || !collapsible) return;
+            burger.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var isOpen = collapsible.classList.toggle('open');
+                burger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            });
+            // Tapping outside the panel closes it.
+            document.addEventListener('click', function (e) {
+                if (!collapsible.classList.contains('open')) return;
+                if (collapsible.contains(e.target) || burger.contains(e.target)) return;
+                collapsible.classList.remove('open');
+                burger.setAttribute('aria-expanded', 'false');
+            });
+            // Escape closes too.
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && collapsible.classList.contains('open')) {
+                    collapsible.classList.remove('open');
+                    burger.setAttribute('aria-expanded', 'false');
+                }
+            });
+        })();
+
+        // Navbar dropdown toggle (Patients / المزيد groups + bell)
+        (function () {
+            document.querySelectorAll('.nav-dropdown').forEach(function (dd) {
+                var toggle = dd.querySelector('.nav-dropdown-toggle');
+                if (!toggle) return;
+                toggle.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    // Close any other open dropdowns
+                    document.querySelectorAll('.nav-dropdown.open').forEach(function (other) {
+                        if (other !== dd) other.classList.remove('open');
+                    });
+                    // Close the bell when opening a regular dropdown
+                    var bell = document.getElementById('navBellWrap');
+                    if (bell) bell.classList.remove('open');
+                    dd.classList.toggle('open');
+                });
+            });
+
+            // Notification bell toggle
+            var bellBtn  = document.getElementById('navBellBtn');
+            var bellWrap = document.getElementById('navBellWrap');
+            if (bellBtn && bellWrap) {
+                bellBtn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    document.querySelectorAll('.nav-dropdown.open').forEach(function (dd) {
+                        dd.classList.remove('open');
+                    });
+                    bellWrap.classList.toggle('open');
+                });
+            }
+
+            // Click outside closes all dropdowns + bell
+            document.addEventListener('click', function (e) {
+                document.querySelectorAll('.nav-dropdown.open').forEach(function (dd) {
+                    if (!dd.contains(e.target)) dd.classList.remove('open');
+                });
+                if (bellWrap && bellWrap.classList.contains('open') && !bellWrap.contains(e.target)) {
+                    bellWrap.classList.remove('open');
+                }
+            });
+
+            // ESC closes all dropdowns + bell
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') {
+                    document.querySelectorAll('.nav-dropdown.open').forEach(function (dd) {
+                        dd.classList.remove('open');
+                    });
+                    if (bellWrap) bellWrap.classList.remove('open');
+                }
+            });
+        })();
+
+        // ----------------------------------------------------------------
+        // Navbar live patient search (suggestions while typing)
+        // Hits /api/patients/search/?q=... — server normalizes alef + spaces
+        // ----------------------------------------------------------------
+        (function () {
+            var input   = document.getElementById('navbarSearchInput');
+            var results = document.getElementById('navbarSearchResults');
+            var wrapper = document.getElementById('navbarSearch');
+            if (!input || !results) return;
+
+            var debounceTimer = null;
+            var activeRequest = null;
+            var highlightIndex = -1;
+
+            function escapeHtml(s) {
+                return String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function close() {
+                results.classList.remove('show');
+                results.innerHTML = '';
+                highlightIndex = -1;
+            }
+
+            // URLs rendered by Django (so they include the /patients/ prefix correctly)
+            var SEARCH_URL = "{% url 'patient_search_api' %}";
+            // Use 0 as a placeholder, then swap it for the real id at runtime
+            var DETAIL_URL_TEMPLATE = "{% url 'patient_detail' 0 %}";
+
+            function detailUrlFor(id) {
+                return DETAIL_URL_TEMPLATE.replace(/0(?=\/?$)/, id);
+            }
+
+            function render(items) {
+                if (!items.length) {
+                    results.innerHTML = '<div class="no-results">لا توجد نتائج مطابقة</div>';
+                    results.classList.add('show');
+                    highlightIndex = -1;
+                    return;
+                }
+                var html = items.map(function (p) {
+                    var meta = [p.file_number, p.phone].filter(Boolean).join(' · ');
+                    return '<a href="' + detailUrlFor(p.id) + '" class="search-result">'
+                         +     '<span class="name">' + escapeHtml(p.name) + '</span>'
+                         +     '<span class="meta">' + escapeHtml(meta) + '</span>'
+                         + '</a>';
+                }).join('');
+                results.innerHTML = html;
+                results.classList.add('show');
+                highlightIndex = -1;
+            }
+
+            function fetchResults(q) {
+                if (activeRequest && activeRequest.abort) {
+                    activeRequest.abort();
+                }
+                results.innerHTML = '<div class="loading">جاري البحث…</div>';
+                results.classList.add('show');
+
+                var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                activeRequest = controller;
+
+                fetch(SEARCH_URL + '?q=' + encodeURIComponent(q), {
+                    credentials: 'same-origin',
+                    signal: controller ? controller.signal : undefined
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    render(data.results || []);
+                })
+                .catch(function (err) {
+                    if (err && err.name === 'AbortError') return;
+                    results.innerHTML = '<div class="no-results">تعذر إجراء البحث</div>';
+                });
+            }
+
+            input.addEventListener('input', function () {
+                var q = input.value.trim();
+                clearTimeout(debounceTimer);
+                if (q.length < 1) {
+                    close();
+                    return;
+                }
+                debounceTimer = setTimeout(function () { fetchResults(q); }, 180);
+            });
+
+            input.addEventListener('focus', function () {
+                if (input.value.trim() && results.innerHTML) {
+                    results.classList.add('show');
+                }
+            });
+
+            // Keyboard navigation: ↑ ↓ Enter Esc
+            input.addEventListener('keydown', function (e) {
+                var items = results.querySelectorAll('.search-result');
+                if (e.key === 'Escape') { close(); input.blur(); return; }
+                if (!items.length) return;
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    highlightIndex = (highlightIndex + 1) % items.length;
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    highlightIndex = (highlightIndex - 1 + items.length) % items.length;
+                } else if (e.key === 'Enter') {
+                    if (highlightIndex >= 0 && items[highlightIndex]) {
+                        e.preventDefault();
+                        window.location.href = items[highlightIndex].getAttribute('href');
+                    }
+                    return;
+                } else {
+                    return;
+                }
+                items.forEach(function (el, i) {
+                    el.classList.toggle('is-active', i === highlightIndex);
+                });
+                if (items[highlightIndex]) {
+                    items[highlightIndex].scrollIntoView({ block: 'nearest' });
+                }
+            });
+
+            // Click outside closes suggestions
+            document.addEventListener('click', function (e) {
+                if (wrapper && !wrapper.contains(e.target)) close();
+            });
+        })();
+    </script>
 
 </body>
 

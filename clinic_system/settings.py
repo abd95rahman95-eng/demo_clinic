@@ -55,15 +55,40 @@ CSRF_TRUSTED_ORIGINS += [
 SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE   = os.environ.get("CSRF_COOKIE_SAMESITE",   "Lax")
 
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
-SECURE_SSL_REDIRECT = not DEBUG
-SECURE_BROWSER_XSS_FILTER = True
+# ─── Security / SSL ─────────────────────────────────────────────────────
+# All TLS-related toggles are controlled by a single `FORCE_SSL` env var
+# instead of being derived from DEBUG. This is critical for two cases:
+#   • Local dev with DEBUG=False (testing prod settings) — must be HTTP.
+#   • A new DigitalOcean droplet that hasn't been issued a TLS cert yet
+#     (e.g. before certbot runs) — also must be HTTP, otherwise nothing
+#     responds. Once your cert + nginx are in place, set FORCE_SSL=True.
+#
+# When FORCE_SSL=True AND there's a reverse proxy (nginx/Caddy) terminating
+# TLS in front of Django, also set USE_PROXY_SSL_HEADER=True so Django
+# trusts the X-Forwarded-Proto header from the proxy.
+FORCE_SSL = os.environ.get("FORCE_SSL", "False") == "True"
+
+SESSION_COOKIE_SECURE = FORCE_SSL
+CSRF_COOKIE_SECURE    = FORCE_SSL
+SECURE_SSL_REDIRECT   = FORCE_SSL
+SECURE_BROWSER_XSS_FILTER  = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
-SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
-SECURE_HSTS_PRELOAD = not DEBUG
+
+# HSTS is browser-sticky: once a browser sees it, it'll force HTTPS for
+# `SECURE_HSTS_SECONDS` even if you turn it off later. Keep it OFF until
+# you're 100% certain TLS works on the public domain — including subdomains
+# if SECURE_HSTS_INCLUDE_SUBDOMAINS is True.
+SECURE_HSTS_SECONDS            = 31536000 if FORCE_SSL else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = FORCE_SSL
+SECURE_HSTS_PRELOAD            = FORCE_SSL
+
+# When Django sits behind nginx/Caddy doing TLS termination, the upstream
+# request to gunicorn arrives over plain HTTP — but with a header marking
+# the original scheme. Tell Django to trust that header so request.is_secure()
+# and the redirect logic both behave correctly.
+if os.environ.get("USE_PROXY_SSL_HEADER", "False") == "True":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 

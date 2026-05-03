@@ -27,7 +27,7 @@ DEBUG = os.environ.get("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.environ.get(
     "ALLOWED_HOSTS",
-    "https://eyadatak.com,https://www.eyadatak.com,http://127.0.0.1,http://localhost"
+    "eyadatak.com,www.eyadatak.com,demo-clinic.onrender.com,127.0.0.1,localhost"
 ).split(",")
 
 CSRF_TRUSTED_ORIGINS = os.environ.get(

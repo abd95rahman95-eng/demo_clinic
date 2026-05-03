@@ -27,12 +27,12 @@ DEBUG = os.environ.get("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.environ.get(
     "ALLOWED_HOSTS",
-    "127.0.0.1,localhost"
+    "https://eyadatak.com,https://www.eyadatak.com,http://127.0.0.1,http://localhost"
 ).split(",")
 
 CSRF_TRUSTED_ORIGINS = os.environ.get(
     "CSRF_TRUSTED_ORIGINS",
-    "http://127.0.0.1,http://localhost"
+    "https://eyadatak.com,https://www.eyadatak.com,http://127.0.0.1,http://localhost"
 ).split(",")
 
 # ─── Capacitor / mobile-app trusted origins ──────────────────────────────

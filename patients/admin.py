@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.models import User
 from django.utils.html import format_html
 from django.urls import reverse
-from .models import Clinic, Patient, UserProfile, Visit, SignupRequest, ToothCondition
+from .models import Clinic, Patient, UserProfile, Visit, SignupRequest, ToothCondition, Notification
 from django.utils import timezone
 
 admin.site.register(UserProfile)
@@ -246,6 +246,59 @@ class ClinicAdmin(admin.ModelAdmin):
             '<span style="padding:6px 10px;border-radius:999px;background:#b91c1c;color:white;">{}</span>',
             "غير نشط / منتهي"
         )
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    """Notification admin — usually staff manage notifications via the
+    in-app page at /patients/notifications/admin/, but registering here
+    gives Django superusers a fallback view with full filtering / search
+    / read-tracker visibility."""
+    list_display = (
+        "title",
+        "target_display",
+        "created_at",
+        "read_count",
+    )
+    list_filter = ("created_at",)
+    search_fields = ("title", "body")
+    raw_id_fields = ("target_clinic",)
+    filter_horizontal = ("read_by_clinics",)
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("-created_at",)
+
+    fieldsets = (
+        ("الإشعار", {
+            "fields": ("title", "body", "url"),
+        }),
+        ("الاستهداف", {
+            "fields": ("target_clinic",),
+            "description": (
+                "اتركه فارغاً لإرسال الإشعار لجميع العيادات (Broadcast). "
+                "اختر عيادة محددة لتقييد ظهور الإشعار."
+            ),
+        }),
+        ("حالة القراءة", {
+            "fields": ("read_by_clinics",),
+            "classes": ("collapse",),
+        }),
+        ("بيانات النظام", {
+            "fields": ("created_at", "updated_at"),
+            "classes": ("collapse",),
+        }),
+    )
+
+    @admin.display(description="المستهدف")
+    def target_display(self, obj):
+        if obj.target_clinic_id:
+            return obj.target_clinic.name
+        return format_html(
+            '<span style="padding:2px 8px;border-radius:999px;background:#dbeafe;color:#1d4ed8;">جميع العيادات</span>'
+        )
+
+    @admin.display(description="عدد القراءات")
+    def read_count(self, obj):
+        return obj.read_by_clinics.count()
 
 
 @admin.register(SignupRequest)

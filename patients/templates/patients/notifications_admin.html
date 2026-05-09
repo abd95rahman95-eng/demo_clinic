@@ -1,43 +1,188 @@
 {% extends 'patients/base.html' %}
 
-{% block title %}إرسال إشعار | عيادتك{% endblock %}
+{% block title %}إدارة الإشعارات | عيادتك{% endblock %}
 
 {% block content %}
-<div class="patient-view-wrapper" style="max-width: 760px; margin: 0 auto;">
+<style>
+    .notif-admin-wrap { max-width: 980px; margin: 0 auto; }
+    .notif-admin-section {
+        background: #fff;
+        border: 1px solid #d0e4d5;
+        border-radius: 12px;
+        padding: 22px 24px;
+        margin-bottom: 22px;
+        box-shadow: 0 2px 8px rgba(26, 107, 60, 0.04);
+    }
+    .notif-admin-section h2 {
+        font-size: 18px;
+        font-weight: 800;
+        color: #1a3d28;
+        margin: 0 0 14px 0;
+    }
+    .clinic-typeahead-wrap { position: relative; }
+    .clinic-typeahead-results {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        left: 0;
+        z-index: 30;
+        max-height: 240px;
+        overflow-y: auto;
+        background: #fff;
+        border: 1px solid #c5deca;
+        border-radius: 8px;
+        box-shadow: 0 6px 18px rgba(26, 107, 60, 0.12);
+        display: none;
+    }
+    .clinic-typeahead-results.open { display: block; }
+    .clinic-typeahead-results .row {
+        padding: 9px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #eef5ef;
+        font-size: 14px;
+        color: #2d5a3d;
+    }
+    .clinic-typeahead-results .row:last-child { border-bottom: none; }
+    .clinic-typeahead-results .row:hover { background: #f5faf6; }
+    .clinic-typeahead-results .row.empty { color: #7a9a84; cursor: default; }
+
+    .selected-clinic-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #e7f4ec;
+        color: #1a6b3c;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 13px;
+        margin-top: 8px;
+    }
+    .selected-clinic-pill button {
+        background: transparent;
+        border: 0;
+        color: #b91c1c;
+        font-size: 14px;
+        cursor: pointer;
+    }
+
+    table.notif-list-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+    }
+    table.notif-list-table th, table.notif-list-table td {
+        padding: 10px 12px;
+        text-align: right;
+        border-bottom: 1px solid #eef5ef;
+        font-size: 14px;
+        color: #2d5a3d;
+        vertical-align: top;
+    }
+    table.notif-list-table th {
+        background: #f5faf6;
+        color: #1a3d28;
+        font-weight: 700;
+    }
+    .notif-target-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .notif-target-broadcast { background: #dbeafe; color: #1d4ed8; }
+    .notif-target-clinic    { background: #dcfce7; color: #15803d; }
+
+    .notif-row-actions { white-space: nowrap; }
+    .notif-row-actions a, .notif-row-actions button {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        text-decoration: none;
+        font-weight: 600;
+        margin-left: 4px;
+        border: 0;
+        cursor: pointer;
+    }
+    .btn-edit-mini   { background: #1d4ed8; color: #fff; }
+    .btn-delete-mini { background: #b91c1c; color: #fff; }
+
+    .notif-empty {
+        background: #fff;
+        border: 1px dashed #c5deca;
+        border-radius: 10px;
+        padding: 30px;
+        text-align: center;
+        color: #5a8a6a;
+    }
+
+    .filter-bar {
+        display: flex; gap: 10px; flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+    .filter-bar input, .filter-bar select {
+        padding: 8px 12px;
+        border: 1px solid #c5deca;
+        border-radius: 8px;
+        font-size: 14px;
+        min-width: 180px;
+    }
+    .filter-bar button {
+        background: #1a6b3c; color: #fff;
+        padding: 8px 16px;
+        border: 0; border-radius: 8px;
+        cursor: pointer; font-weight: 600;
+    }
+
+    .pagination-wrap {
+        display: flex; gap: 6px; justify-content: center;
+        margin-top: 14px;
+    }
+    .pagination-wrap a, .pagination-wrap span {
+        padding: 5px 10px;
+        border-radius: 6px;
+        text-decoration: none;
+        background: #f5faf6;
+        color: #1a6b3c;
+        font-size: 13px;
+        border: 1px solid #d0e4d5;
+    }
+    .pagination-wrap span.current {
+        background: #1a6b3c; color: #fff;
+    }
+</style>
+
+<div class="notif-admin-wrap">
     <h1 style="margin:0 0 18px 0; font-size: 26px; color:#1a3d28; font-weight:800;">
-        <i class="fa-solid fa-bullhorn"></i> إرسال إشعار جديد
+        <i class="fa-solid fa-bullhorn"></i> إدارة الإشعارات
     </h1>
     <p class="meta" style="color:#5a8a6a; margin-bottom: 22px;">
-        أرسل إشعاراً يظهر في جرس الإشعارات لجميع العيادات أو لعيادة محددة.
+        أرسل إشعاراً لجميع العيادات أو لعيادة محددة، وعدّل أو احذف الإشعارات السابقة.
     </p>
 
-    {% if sent_msg %}
-    <div class="message-box message-success">
-        <i class="fa-solid fa-circle-check"></i> {{ sent_msg }}
-    </div>
-    {% endif %}
     {% if error %}
     <div class="message-box message-error">
         <i class="fa-solid fa-triangle-exclamation"></i> {{ error }}
     </div>
     {% endif %}
 
-    <div class="ui-form-card">
+    {# ── Create form ───────────────────────────────────────────────── #}
+    <div class="notif-admin-section">
+        <h2><i class="fa-solid fa-plus"></i> إرسال إشعار جديد</h2>
         <form method="post">
             {% csrf_token %}
-
             <div class="form-group full-width">
                 <label>العنوان <span style="color:#b91c1c;">*</span></label>
-                <input type="text" name="title" required maxlength="120"
+                <input type="text" name="title" required maxlength="200"
                        placeholder="مثال: ميزة جديدة متوفرة الآن">
             </div>
-
             <div class="form-group full-width">
                 <label>المحتوى</label>
                 <textarea name="body" rows="4"
                           placeholder="نص الإشعار التفصيلي (اختياري)"></textarea>
             </div>
-
             <div class="form-grid-layout">
                 <div class="form-group">
                     <label>رابط (اختياري)</label>
@@ -46,17 +191,24 @@
                 </div>
                 <div class="form-group">
                     <label>المستهدف</label>
-                    <select name="target_clinic_id">
-                        <option value="">جميع العيادات (Broadcast)</option>
-                        {% for c in clinics %}
-                        <option value="{{ c.id }}">
-                            {{ c.name }}{% if c.clinic_number %} (#{{ c.clinic_number }}){% endif %}
-                        </option>
-                        {% endfor %}
-                    </select>
+
+                    {# Hidden field that actually gets posted. Filled by the
+                       typeahead JS when the admin picks a clinic, or left
+                       empty for a broadcast. #}
+                    <input type="hidden" name="target_clinic_id" id="targetClinicIdInput" value="">
+
+                    <div class="clinic-typeahead-wrap">
+                        <input type="text" id="clinicSearchInput"
+                               autocomplete="off"
+                               placeholder="ابحث عن عيادة بالاسم أو رقمها — اتركه فارغاً للإرسال للجميع">
+                        <div class="clinic-typeahead-results" id="clinicSearchResults"></div>
+                    </div>
+                    <div id="selectedClinicPillWrap"></div>
+                    <div style="font-size:12px; color:#7a9a84; margin-top:6px;">
+                        إذا تركت الحقل فارغاً سيتم إرسال الإشعار <b>لجميع العيادات</b>.
+                    </div>
                 </div>
             </div>
-
             <div class="form-actions">
                 <button type="submit" class="btn-submit">
                     <i class="fa-solid fa-paper-plane"></i> إرسال الإشعار
@@ -65,5 +217,189 @@
             </div>
         </form>
     </div>
+
+    {# ── List + filters ─────────────────────────────────────────────── #}
+    <div class="notif-admin-section">
+        <h2><i class="fa-solid fa-list"></i> الإشعارات السابقة</h2>
+
+        <form method="get" class="filter-bar">
+            <input type="text" name="q" value="{{ list_q }}"
+                   placeholder="ابحث في العنوان أو المحتوى">
+            <select name="clinic">
+                <option value="">— جميع المستهدفين —</option>
+                <option value="broadcast" {% if list_clinic == 'broadcast' %}selected{% endif %}>إشعارات عامة (Broadcast)</option>
+            </select>
+            <button type="submit"><i class="fa-solid fa-filter"></i> تطبيق</button>
+            {% if list_q or list_clinic %}
+            <a href="{% url 'notifications_admin' %}" style="align-self:center; color:#b91c1c; font-weight:600;">
+                <i class="fa-solid fa-xmark"></i> مسح الفلتر
+            </a>
+            {% endif %}
+        </form>
+
+        {% if notifications_page and notifications_page.object_list %}
+        <table class="notif-list-table">
+            <thead>
+                <tr>
+                    <th>العنوان</th>
+                    <th>المستهدف</th>
+                    <th>تاريخ الإرسال</th>
+                    <th>إجراءات</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for n in notifications_page.object_list %}
+                <tr>
+                    <td>
+                        <b>{{ n.title }}</b>
+                        {% if n.body %}
+                        <div style="color:#5a8a6a; font-size:12px; margin-top:3px;">
+                            {{ n.body|truncatechars:90 }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if n.target_clinic %}
+                        <span class="notif-target-badge notif-target-clinic">
+                            {{ n.target_clinic.name }}{% if n.target_clinic.clinic_number %} (#{{ n.target_clinic.clinic_number }}){% endif %}
+                        </span>
+                        {% else %}
+                        <span class="notif-target-badge notif-target-broadcast">جميع العيادات</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ n.created_at|date:"Y-m-d H:i" }}</td>
+                    <td class="notif-row-actions">
+                        <a href="{% url 'notification_edit' n.id %}" class="btn-edit-mini">
+                            <i class="fa-solid fa-pen"></i> تعديل
+                        </a>
+                        <form method="post" action="{% url 'notification_delete' n.id %}"
+                              style="display:inline;"
+                              onsubmit="return confirm('هل أنت متأكد من حذف هذا الإشعار؟');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-delete-mini">
+                                <i class="fa-solid fa-trash"></i> حذف
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if notifications_page.has_other_pages %}
+        <div class="pagination-wrap">
+            {% if notifications_page.has_previous %}
+            <a href="?page={{ notifications_page.previous_page_number }}{% if list_q %}&q={{ list_q }}{% endif %}{% if list_clinic %}&clinic={{ list_clinic }}{% endif %}">السابق</a>
+            {% endif %}
+            <span class="current">{{ notifications_page.number }} / {{ notifications_page.paginator.num_pages }}</span>
+            {% if notifications_page.has_next %}
+            <a href="?page={{ notifications_page.next_page_number }}{% if list_q %}&q={{ list_q }}{% endif %}{% if list_clinic %}&clinic={{ list_clinic }}{% endif %}">التالي</a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="notif-empty">
+            <i class="fa-solid fa-bell-slash" style="font-size:28px; opacity:0.5; display:block; margin-bottom:10px;"></i>
+            لا توجد إشعارات سابقة بعد.
+        </div>
+        {% endif %}
+    </div>
 </div>
+
+<script>
+(function () {
+    // ── Clinic search-as-you-type for the create form ───────────────────
+    var input    = document.getElementById('clinicSearchInput');
+    var results  = document.getElementById('clinicSearchResults');
+    var hidden   = document.getElementById('targetClinicIdInput');
+    var pillWrap = document.getElementById('selectedClinicPillWrap');
+    var SEARCH_URL = "{% url 'notifications_clinic_search_api' %}";
+
+    var debounceTimer = null;
+    var lastQ = '';
+
+    function clearResults() {
+        results.innerHTML = '';
+        results.classList.remove('open');
+    }
+
+    function renderResults(items) {
+        results.innerHTML = '';
+        if (!items.length) {
+            var empty = document.createElement('div');
+            empty.className = 'row empty';
+            empty.textContent = 'لا توجد عيادات مطابقة.';
+            results.appendChild(empty);
+        } else {
+            items.forEach(function (it) {
+                var row = document.createElement('div');
+                row.className = 'row';
+                row.textContent = it.label;
+                row.dataset.id = it.id;
+                row.dataset.label = it.label;
+                row.addEventListener('mousedown', function (ev) {
+                    ev.preventDefault();
+                    selectClinic(it.id, it.label);
+                });
+                results.appendChild(row);
+            });
+        }
+        results.classList.add('open');
+    }
+
+    function selectClinic(id, label) {
+        hidden.value = id;
+        input.value = '';
+        clearResults();
+        pillWrap.innerHTML = '';
+        var pill = document.createElement('span');
+        pill.className = 'selected-clinic-pill';
+        pill.innerHTML = '<i class="fa-solid fa-clinic-medical"></i> ' +
+                         escapeHtml(label) +
+                         ' <button type="button" aria-label="إزالة">×</button>';
+        pill.querySelector('button').addEventListener('click', clearSelection);
+        pillWrap.appendChild(pill);
+    }
+
+    function clearSelection() {
+        hidden.value = '';
+        pillWrap.innerHTML = '';
+        input.value = '';
+        input.focus();
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
+
+    if (input) {
+        input.addEventListener('input', function () {
+            var q = input.value.trim();
+            if (q === lastQ) return;
+            lastQ = q;
+            clearTimeout(debounceTimer);
+            if (!q) { clearResults(); return; }
+            debounceTimer = setTimeout(function () {
+                fetch(SEARCH_URL + '?q=' + encodeURIComponent(q), {
+                    credentials: 'same-origin'
+                })
+                .then(function (r) { return r.ok ? r.json() : {results: []}; })
+                .then(function (data) { renderResults(data.results || []); })
+                .catch(function () { clearResults(); });
+            }, 180);
+        });
+        input.addEventListener('focus', function () {
+            if (results.children.length) results.classList.add('open');
+        });
+        document.addEventListener('click', function (ev) {
+            if (!results.contains(ev.target) && ev.target !== input) {
+                clearResults();
+            }
+        });
+    }
+})();
+</script>
 {% endblock %}

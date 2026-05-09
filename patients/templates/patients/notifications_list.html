@@ -69,7 +69,7 @@
         <a href="{{ n.url|default:'#' }}" class="notif-item {% if not n.read %}unread{% endif %}">
             <div class="notif-title">{{ n.title }}</div>
             {% if n.body %}<div class="notif-body">{{ n.body }}</div>{% endif %}
-            <div class="notif-meta"><i class="fa-regular fa-clock"></i> {{ n.created_at|cut:"T" }}</div>
+            <div class="notif-meta"><i class="fa-regular fa-clock"></i> {{ n.created_at }}</div>
         </a>
         {% endfor %}
     {% else %}

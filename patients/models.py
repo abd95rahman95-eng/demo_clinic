@@ -505,6 +505,54 @@ class ToothCondition(models.Model):
     def __str__(self):
         return f"Tooth {self.tooth_number}/{self.surface} = {self.condition} (visit {self.visit_id})"
 
+class Notification(models.Model):
+    """In-app notifications shown in the navbar bell.
+
+    A notification with `target_clinic = None` is a broadcast — every
+    clinic sees it. A notification with a specific `target_clinic` is
+    only visible to that clinic. The `read_by_clinics` M2M tracks which
+    clinics have already seen each notification (so the unread badge
+    counter only counts what's actually unread).
+    """
+    title = models.CharField(max_length=200, verbose_name='العنوان')
+    body  = models.TextField(blank=True, default='', verbose_name='المحتوى')
+    url   = models.CharField(
+        max_length=500, blank=True, default='',
+        verbose_name='رابط (اختياري)',
+        help_text='رابط داخلي أو خارجي يفتح عند الضغط على الإشعار.',
+    )
+    target_clinic = models.ForeignKey(
+        'Clinic',
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='targeted_notifications',
+        verbose_name='العيادة المستهدفة',
+        help_text='اتركه فارغاً لإرسال الإشعار لجميع العيادات.',
+    )
+    read_by_clinics = models.ManyToManyField(
+        'Clinic',
+        blank=True,
+        related_name='read_notifications',
+        verbose_name='قُرأ من قِبل',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('-created_at',)
+        verbose_name = 'إشعار'
+        verbose_name_plural = 'الإشعارات'
+
+    def __str__(self):
+        if self.target_clinic_id:
+            return f'{self.title} → {self.target_clinic}'
+        return f'{self.title} (broadcast)'
+
+    @property
+    def is_broadcast(self) -> bool:
+        return self.target_clinic_id is None
+
+
 class SignupRequest(models.Model):
     STATUS_NEW = "new"
     STATUS_REVIEWED = "reviewed"

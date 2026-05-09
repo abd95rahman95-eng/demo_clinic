@@ -30,10 +30,17 @@ ALLOWED_HOSTS = os.environ.get(
     "eyadatak.com,www.eyadatak.com,demo-clinic.onrender.com,127.0.0.1,localhost"
 ).split(",")
 
-CSRF_TRUSTED_ORIGINS = os.environ.get(
+# Django 4.0+ requires every entry to include a scheme (http:// or https://).
+# We also strip whitespace and drop empty strings, otherwise a stray comma or
+# an empty env var would crash the system check (4_0.E001).
+_csrf_raw = os.environ.get(
     "CSRF_TRUSTED_ORIGINS",
     "https://eyadatak.com,https://www.eyadatak.com,http://127.0.0.1,http://localhost"
-).split(",")
+)
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in _csrf_raw.split(",")
+    if o.strip() and "://" in o.strip()
+]
 
 # ─── Capacitor / mobile-app trusted origins ──────────────────────────────
 # When the site runs inside the Capacitor native shell (iOS/Android), the

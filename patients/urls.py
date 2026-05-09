@@ -35,7 +35,11 @@ urlpatterns = [
     # Notifications
     path('notifications/', views.notifications_list, name='notifications_list'),
     path('notifications/admin/', views.notifications_admin, name='notifications_admin'),
+    path('notifications/admin/<int:id>/edit/', views.notification_edit, name='notification_edit'),
+    path('notifications/admin/<int:id>/delete/', views.notification_delete, name='notification_delete'),
     path('notifications/mark-all-read/', views.notifications_mark_all_read, name='notifications_mark_all_read'),
+    # Staff-only autocomplete used by the admin form's clinic search box.
+    path('api/notifications/clinic-search/', views.notifications_clinic_search_api, name='notifications_clinic_search_api'),
 
     # Live patient search (used by navbar search box)
     path('api/patients/search/', views.patient_search_api, name='patient_search_api'),

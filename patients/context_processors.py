@@ -1,5 +1,7 @@
-from .models import UserProfile, Visit
-from . import notifications_store
+from django.db.models import Q
+
+from .models import UserProfile, Visit, Notification
+
 
 def clinic_role_context(request):
     if not request.user.is_authenticated:
@@ -18,35 +20,45 @@ def clinic_role_context(request):
 
     try:
         profile = request.user.userprofile
-        clinic_name_global = profile.clinic.name
+        clinic = profile.clinic
+        clinic_name_global = clinic.name
 
         if request.user.groups.filter(name='Doctor').exists():
             pending_visits_badge = Visit.objects.filter(
-                clinic=profile.clinic,
+                clinic=clinic,
                 assigned_doctor=request.user,
                 status='nurse_draft'
             ).count()
 
-        # Notifications (JSON-backed store — see notifications_store.py).
-        # Each row already carries a `read` flag relative to this clinic;
-        # the navbar template reads `recent_notifications` for the bell
-        # dropdown and `notifications_badge` for the red counter badge.
-        clinic_id = profile.clinic.id
+        # Notifications — DB-backed (Notification model). Each row in the
+        # bell carries a `read` flag relative to this clinic. The navbar
+        # template reads `recent_notifications` for the dropdown and
+        # `notifications_badge` for the red counter.
         try:
-            raw = notifications_store.get_notifications_for_clinic(clinic_id, limit=10)
+            visible_qs = Notification.objects.filter(
+                Q(target_clinic__isnull=True) | Q(target_clinic=clinic)
+            ).order_by('-created_at')
+
+            recent = list(visible_qs[:10])
+            read_ids = set(
+                Notification.objects.filter(
+                    id__in=[n.id for n in recent],
+                    read_by_clinics=clinic,
+                ).values_list('id', flat=True)
+            )
             recent_notifications = [
                 {
-                    'id':    n.get('id', ''),
-                    'title': n.get('title', ''),
+                    'id':    n.id,
+                    'title': n.title,
                     # The bell template uses `meta` for the secondary line
                     # (timestamp + body preview).
                     'meta':  _format_meta(n),
-                    'url':   n.get('url') or '#',
-                    'read':  bool(n.get('read')),
+                    'url':   n.url or '#',
+                    'read':  n.id in read_ids,
                 }
-                for n in raw
+                for n in recent
             ]
-            notifications_badge = notifications_store.unread_count_for_clinic(clinic_id)
+            notifications_badge = visible_qs.exclude(read_by_clinics=clinic).count()
         except Exception:
             # Bell must never crash the page.
             recent_notifications = []
@@ -67,8 +79,8 @@ def clinic_role_context(request):
 def _format_meta(notif):
     """Build the secondary "meta" line shown under each notification
     title in the bell dropdown — short body preview + timestamp."""
-    body = (notif.get('body') or '').strip()
-    when = (notif.get('created_at') or '').replace('T', ' ')
+    body = (notif.body or '').strip()
+    when = notif.created_at.strftime('%Y-%m-%d %H:%M') if notif.created_at else ''
     if body and len(body) > 80:
         body = body[:80].rstrip() + '…'
     return f"{body} · {when}" if body else when

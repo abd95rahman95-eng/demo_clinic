@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.http import JsonResponse
-from .models import Patient, Visit, UserProfile, VisitAttachment, ToothCondition
+from .models import Patient, Visit, UserProfile, VisitAttachment, ToothCondition, Notification, Clinic
 from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
@@ -721,65 +721,19 @@ def home_view(request):
 
 
 def signup_request_view(request):
+    # NOTE: The notification email is sent automatically by the
+    # `notify_new_signup_request` post_save signal in patients/signals.py.
+    # Don't re-send it from here or recipients will get two emails per
+    # signup with slightly different formats.
     if request.method == "POST":
         form = SignupRequestForm(request.POST)
         if form.is_valid():
-            instance = form.save()
-            # Email the team about the new signup. We do this AFTER save so a
-            # mailserver outage doesn't block the request from being recorded.
-            try:
-                _notify_signup_team(instance)
-            except Exception:
-                # Never let a mail failure crash the user-facing form. The
-                # request is already saved in the DB and visible to admins.
-                pass
+            form.save()
             return render(request, "patients/signup_success.html")
     else:
         form = SignupRequestForm()
 
     return render(request, "patients/signup_request.html", {"form": form})
-
-
-def _notify_signup_team(signup):
-    """Send a plain-text email to SIGNUP_NOTIFY_EMAILS describing a new
-    signup request. Falls back to console backend if SMTP isn't configured
-    so dev never errors.
-    """
-    from django.conf import settings as _settings
-    from django.core.mail import send_mail
-
-    recipients = list(getattr(_settings, 'SIGNUP_NOTIFY_EMAILS', []))
-    if not recipients:
-        return
-
-    subject = f"[Eyadatak] طلب تسجيل عيادة جديد — {signup.clinic_name}"
-    body_lines = [
-        "تم استلام طلب تسجيل عيادة جديد:",
-        "",
-        f"اسم العيادة: {signup.clinic_name}",
-        f"التخصص: {signup.clinic_specialty}",
-        f"المدينة/المنطقة: {signup.city or '—'}",
-        "",
-        f"اسم الطبيب: {signup.doctor_name}",
-        f"هاتف الطبيب: {signup.doctor_phone}",
-        f"بريد الطبيب: {signup.doctor_email}",
-        "",
-        f"اسم الممرض: {signup.nurse_name or '—'}",
-        f"هاتف الممرض: {signup.nurse_phone or '—'}",
-        "",
-        f"ملاحظات إضافية: {signup.notes or '—'}",
-        "",
-        f"تاريخ الطلب: {signup.created_at:%Y-%m-%d %H:%M}",
-    ]
-    body = "\n".join(body_lines)
-
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=getattr(_settings, 'DEFAULT_FROM_EMAIL', 'info@eyadatak.com'),
-        recipient_list=recipients,
-        fail_silently=False,
-    )
 
 def pricing_view(request):
     return render(request, "patients/pricing.html")
@@ -921,6 +875,18 @@ def delete_visit_attachment(request, attachment_id):
     return redirect('patient_detail', id=visit.patient.id)
 
 
+# -----------------------------------------------------------------------------
+# Notifications
+# -----------------------------------------------------------------------------
+def _notifications_for_clinic_qs(clinic):
+    """All notifications visible to this clinic — broadcasts + ones
+    explicitly targeted at it. Newest first.
+    """
+    return Notification.objects.filter(
+        Q(target_clinic__isnull=True) | Q(target_clinic=clinic)
+    ).order_by('-created_at')
+
+
 @login_required(login_url='login')
 @require_POST
 def notifications_mark_all_read(request):
@@ -932,11 +898,12 @@ def notifications_mark_all_read(request):
     except UserProfile.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'no_clinic'}, status=400)
 
-    from . import notifications_store
-    try:
-        updated = notifications_store.mark_all_read_for_clinic(profile.clinic.id)
-    except Exception as e:
-        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+    clinic = profile.clinic
+    qs = _notifications_for_clinic_qs(clinic).exclude(read_by_clinics=clinic)
+    updated = 0
+    for notif in qs:
+        notif.read_by_clinics.add(clinic)
+        updated += 1
     return JsonResponse({'ok': True, 'updated': updated})
 
 
@@ -949,26 +916,43 @@ def notifications_list(request):
     except UserProfile.DoesNotExist:
         return redirect('dashboard')
 
-    from . import notifications_store
-    items = notifications_store.get_notifications_for_clinic(profile.clinic.id, limit=200)
+    clinic = profile.clinic
+    qs = _notifications_for_clinic_qs(clinic)[:200]
+    read_ids = set(
+        Notification.objects.filter(
+            id__in=[n.id for n in qs],
+            read_by_clinics=clinic,
+        ).values_list('id', flat=True)
+    )
+    items = []
+    for n in qs:
+        items.append({
+            'id': n.id,
+            'title': n.title,
+            'body': n.body,
+            'url': n.url,
+            'created_at': n.created_at.strftime('%Y-%m-%d %H:%M'),
+            'read': n.id in read_ids,
+        })
     return render(request, 'patients/notifications_list.html', {
         'notifications': items,
     })
 
 
+def _is_staff(user):
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
+
+
 @login_required(login_url='login')
 def notifications_admin(request):
     """Staff-only page to broadcast a notification to all clinics or to
-    a specific clinic. Lives outside Django admin so superusers can
-    create notifications without leaving the app's UI.
+    a specific clinic, plus list / edit / delete existing notifications.
 
-    Permission: only Django superusers / staff can post here. Non-staff
-    users get a 403 redirect to the dashboard."""
-    if not (request.user.is_staff or request.user.is_superuser):
+    Permission: only Django superusers / staff can use this page.
+    Non-staff users are redirected to the dashboard.
+    """
+    if not _is_staff(request.user):
         return redirect('dashboard')
-
-    from . import notifications_store
-    from .models import Clinic
 
     sent_msg = None
     error = None
@@ -982,29 +966,145 @@ def notifications_admin(request):
         if not title:
             error = 'العنوان مطلوب.'
         else:
-            target_id = None
+            target_clinic = None
             if target:
                 try:
                     target_id = int(target)
-                    # Validate the clinic exists; ignore otherwise.
-                    if not Clinic.objects.filter(id=target_id).exists():
+                    target_clinic = Clinic.objects.filter(id=target_id).first()
+                    if target_clinic is None:
                         error = f'العيادة رقم {target_id} غير موجودة.'
-                        target_id = None
                 except ValueError:
                     error = 'معرف العيادة يجب أن يكون رقماً صحيحاً.'
             if not error:
-                notifications_store.add_notification(
+                Notification.objects.create(
                     title=title, body=body, url=url,
-                    target_clinic_id=target_id,
+                    target_clinic=target_clinic,
                 )
-                sent_msg = 'تم إرسال الإشعار بنجاح.'
+                messages.success(request, 'تم إرسال الإشعار بنجاح.')
+                return redirect('notifications_admin')
 
-    clinics = Clinic.objects.order_by('clinic_number', 'name')
+    # Filter the list shown below the form: optional ?q=... search by
+    # title/body, and optional ?clinic=<id> (or 'broadcast') filter.
+    list_q = (request.GET.get('q') or '').strip()
+    list_clinic = (request.GET.get('clinic') or '').strip()
+
+    notif_qs = Notification.objects.select_related('target_clinic').order_by('-created_at')
+    if list_q:
+        notif_qs = notif_qs.filter(Q(title__icontains=list_q) | Q(body__icontains=list_q))
+    if list_clinic == 'broadcast':
+        notif_qs = notif_qs.filter(target_clinic__isnull=True)
+    elif list_clinic:
+        try:
+            notif_qs = notif_qs.filter(target_clinic_id=int(list_clinic))
+        except ValueError:
+            pass
+
+    paginator = Paginator(notif_qs, 20)
+    page = paginator.get_page(request.GET.get('page'))
+
     return render(request, 'patients/notifications_admin.html', {
-        'clinics': clinics,
         'sent_msg': sent_msg,
         'error': error,
+        'notifications_page': page,
+        'list_q': list_q,
+        'list_clinic': list_clinic,
     })
+
+
+@login_required(login_url='login')
+def notification_edit(request, id):
+    """Staff-only — edit an existing notification (title, body, url,
+    target clinic). After saving, the unread state is reset for that
+    notification so all targeted clinics see the update."""
+    if not _is_staff(request.user):
+        return redirect('dashboard')
+
+    notif = get_object_or_404(Notification, id=id)
+    error = None
+
+    if request.method == 'POST':
+        title = (request.POST.get('title') or '').strip()
+        body  = (request.POST.get('body') or '').strip()
+        url   = (request.POST.get('url') or '').strip()
+        target = (request.POST.get('target_clinic_id') or '').strip()
+        reset_reads = request.POST.get('reset_reads') == 'on'
+
+        if not title:
+            error = 'العنوان مطلوب.'
+        else:
+            target_clinic = None
+            if target:
+                try:
+                    target_id = int(target)
+                    target_clinic = Clinic.objects.filter(id=target_id).first()
+                    if target_clinic is None:
+                        error = f'العيادة رقم {target_id} غير موجودة.'
+                except ValueError:
+                    error = 'معرف العيادة يجب أن يكون رقماً صحيحاً.'
+            if not error:
+                notif.title = title
+                notif.body = body
+                notif.url = url
+                notif.target_clinic = target_clinic
+                notif.save()
+                if reset_reads:
+                    notif.read_by_clinics.clear()
+                messages.success(request, 'تم تعديل الإشعار بنجاح.')
+                return redirect('notifications_admin')
+
+    return render(request, 'patients/notification_edit.html', {
+        'notification': notif,
+        'error': error,
+    })
+
+
+@login_required(login_url='login')
+@require_POST
+def notification_delete(request, id):
+    """Staff-only — delete a notification entirely (it disappears from
+    every clinic's bell)."""
+    if not _is_staff(request.user):
+        return redirect('dashboard')
+
+    notif = get_object_or_404(Notification, id=id)
+    notif.delete()
+    messages.success(request, 'تم حذف الإشعار.')
+    return redirect('notifications_admin')
+
+
+@login_required(login_url='login')
+def notifications_clinic_search_api(request):
+    """Staff-only autocomplete used by the admin form's clinic search
+    box. Returns up to 10 clinics matching the query (clinic name OR
+    clinic_number). Each result has {id, label} ready to plug into a
+    typeahead dropdown."""
+    if not _is_staff(request.user):
+        return JsonResponse({'results': []}, status=403)
+
+    q = (request.GET.get('q') or '').strip()
+    if not q:
+        return JsonResponse({'results': []})
+
+    qs = Clinic.objects.all()
+    # Try clinic_number first (admins commonly know the number) then
+    # fall back to a name contains lookup so partial typing works.
+    try:
+        num = int(q)
+        qs = qs.filter(Q(clinic_number=num) | Q(name__icontains=q))
+    except ValueError:
+        qs = qs.filter(name__icontains=q)
+
+    qs = qs.order_by('clinic_number', 'name')[:10]
+    results = [
+        {
+            'id': c.id,
+            'clinic_number': c.clinic_number,
+            'name': c.name,
+            'label': f"{c.name} (#{c.clinic_number})" if c.clinic_number else c.name,
+        }
+        for c in qs
+    ]
+    return JsonResponse({'results': results})
 
 
 @login_required(login_url='login')

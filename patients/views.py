@@ -1,3 +1,4 @@
+import logging
 import os
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -988,24 +989,60 @@ def notifications_admin(request):
     list_q = (request.GET.get('q') or '').strip()
     list_clinic = (request.GET.get('clinic') or '').strip()
 
-    notif_qs = Notification.objects.select_related('target_clinic').order_by('-created_at')
+    # Build the list as a plain Python list of dicts up-front rather than
+    # passing a queryset through to the template. This sidesteps any
+    # template-time DB access (e.g. lazy FK lookups on a NULL-able
+    # target_clinic when select_related is involved with the Meta
+    # ordering on a freshly migrated SQLite DB), and makes the rendering
+    # path bulletproof — a single bad row can't blow up the whole page.
+    base_qs = Notification.objects.select_related('target_clinic')
     if list_q:
-        notif_qs = notif_qs.filter(Q(title__icontains=list_q) | Q(body__icontains=list_q))
+        base_qs = base_qs.filter(Q(title__icontains=list_q) | Q(body__icontains=list_q))
     if list_clinic == 'broadcast':
-        notif_qs = notif_qs.filter(target_clinic__isnull=True)
+        base_qs = base_qs.filter(target_clinic__isnull=True)
     elif list_clinic:
         try:
-            notif_qs = notif_qs.filter(target_clinic_id=int(list_clinic))
+            base_qs = base_qs.filter(target_clinic_id=int(list_clinic))
         except ValueError:
             pass
 
-    paginator = Paginator(notif_qs, 20)
+    # Explicit ordering on the ID is a safe tiebreaker — order_by('-created_at')
+    # alone with rapidly-created rows can have equal timestamps which leads
+    # paginator + select_related to occasionally repeat or skip rows.
+    base_qs = base_qs.order_by('-created_at', '-id')
+
+    paginator = Paginator(base_qs, 20)
     page = paginator.get_page(request.GET.get('page'))
+
+    notif_rows = []
+    for n in page.object_list:
+        try:
+            target_label = ''
+            if n.target_clinic_id:
+                tc = n.target_clinic
+                if tc is not None:
+                    if tc.clinic_number:
+                        target_label = f"{tc.name} (#{tc.clinic_number})"
+                    else:
+                        target_label = tc.name
+            notif_rows.append({
+                'id':           n.id,
+                'title':        n.title or '',
+                'body':         n.body or '',
+                'created_at':   n.created_at,
+                'is_broadcast': n.target_clinic_id is None,
+                'target_label': target_label,
+            })
+        except Exception:
+            # Never let a single bad row break the whole list.
+            log = logging.getLogger(__name__)
+            log.exception("notifications_admin: failed to render notification id=%s", getattr(n, 'id', '?'))
 
     return render(request, 'patients/notifications_admin.html', {
         'sent_msg': sent_msg,
         'error': error,
         'notifications_page': page,
+        'notif_rows': notif_rows,
         'list_q': list_q,
         'list_clinic': list_clinic,
     })
@@ -1502,8 +1539,7 @@ def ai_medical_assistance(request, visit_id):
         except Exception:
             err_body = str(e)
         _refund_ai_usage(clinic, usage['source'])
-        return JsonResponse(
-            {'ok': False, 'error': f'Claude API error ({e.code}): {err_body[:500]}'},
+        return JsonResponse(            {'ok': False, 'error': f'Claude API error ({e.code}): {err_body[:500]}'},
             status=502,
         )
     except Exception as e:

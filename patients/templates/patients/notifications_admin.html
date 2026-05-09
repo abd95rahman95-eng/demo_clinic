@@ -237,7 +237,7 @@
             {% endif %}
         </form>
 
-        {% if notifications_page and notifications_page.object_list %}
+        {% if notif_rows %}
         <table class="notif-list-table">
             <thead>
                 <tr>
@@ -248,7 +248,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for n in notifications_page.object_list %}
+                {% for n in notif_rows %}
                 <tr>
                     <td>
                         <b>{{ n.title }}</b>
@@ -259,12 +259,12 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if n.target_clinic %}
-                        <span class="notif-target-badge notif-target-clinic">
-                            {{ n.target_clinic.name }}{% if n.target_clinic.clinic_number %} (#{{ n.target_clinic.clinic_number }}){% endif %}
-                        </span>
-                        {% else %}
+                        {% if n.is_broadcast %}
                         <span class="notif-target-badge notif-target-broadcast">جميع العيادات</span>
+                        {% else %}
+                        <span class="notif-target-badge notif-target-clinic">
+                            {{ n.target_label }}
+                        </span>
                         {% endif %}
                     </td>
                     <td>{{ n.created_at|date:"Y-m-d H:i" }}</td>

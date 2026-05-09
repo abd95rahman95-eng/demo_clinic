@@ -26,6 +26,17 @@ urlpatterns = [
     path('nurse-edit-visit/<int:id>/', views.nurse_edit_visit, name='nurse_edit_visit'),
     path('clear-appointment/<int:visit_id>/', views.clear_appointment, name='clear_appointment'),
 
+    # Delete a single visit attachment (POST-only). Available to doctors
+    # and nurses inside the same clinic. The view decides where to send
+    # the user back based on the visit status + role; an explicit `?next=`
+    # parameter overrides that.
+    path('attachments/<int:attachment_id>/delete/', views.delete_visit_attachment, name='delete_visit_attachment'),
+
+    # Notifications
+    path('notifications/', views.notifications_list, name='notifications_list'),
+    path('notifications/admin/', views.notifications_admin, name='notifications_admin'),
+    path('notifications/mark-all-read/', views.notifications_mark_all_read, name='notifications_mark_all_read'),
+
     # Live patient search (used by navbar search box)
     path('api/patients/search/', views.patient_search_api, name='patient_search_api'),
 

@@ -209,21 +209,41 @@
                 background: rgba(255, 255, 255, 0.16);
             }
 
-            /* Dropdown menu inside collapsible: render inline (no abs popup) */
-            .navbar-collapsible .nav-dropdown { width: 100%; }
+            /* Dropdown menu inside collapsible: render inline (no abs popup).
+               IMPORTANT: the dropdown toggles ("المرضى" + "المزيد") must
+               match the width and text-alignment of plain anchor items so
+               the burger panel reads as a uniform vertical list in RTL —
+               full width, right-aligned text, identical padding. */
+            .navbar-collapsible .nav-dropdown {
+                width: 100%;
+                box-sizing: border-box;
+                margin: 0;
+                display: block;
+            }
             .navbar-collapsible .nav-dropdown-toggle {
                 width: 100%;
+                box-sizing: border-box;
                 padding: 10px 12px;
                 border-radius: 8px;
                 background: rgba(255, 255, 255, 0.06);
                 border: 1px solid rgba(255, 255, 255, 0.1);
-                justify-content: space-between;
+                /* Right-aligned in RTL like the plain links — keep the
+                   caret pinned to the far edge with margin-left:auto. */
+                justify-content: flex-start;
+                text-align: right;
+                font-size: inherit;
+                line-height: inherit;
+            }
+            .navbar-collapsible .nav-dropdown-toggle .caret {
+                margin-left: auto;
             }
             .navbar-collapsible .nav-dropdown-menu {
                 position: static;
                 box-shadow: none;
                 margin: 4px 0 0;
                 background: rgba(255, 255, 255, 0.92);
+                box-sizing: border-box;
+                width: 100%;
             }
 
             /* Bell rendered as a normal row inside the burger panel */
@@ -1490,7 +1510,7 @@
                         {% endif %}
                     </div>
                     <div class="nav-bell-footer">
-                        <a href="#"><i class="fa-solid fa-list"></i> عرض كل الإشعارات</a>
+                        <a href="{% url 'notifications_list' %}"><i class="fa-solid fa-list"></i> عرض كل الإشعارات</a>
                     </div>
                 </div>
             </div>

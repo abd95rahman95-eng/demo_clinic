@@ -112,6 +112,13 @@
                     <a href="{{ att.image.url }}" target="_blank" rel="noopener">
                         <img src="{{ att.image.url }}" alt="مرفق">
                     </a>
+                    <button type="button"
+                            class="attachment-delete-btn"
+                            data-url="{% url 'delete_visit_attachment' att.id %}"
+                            title="حذف المرفق"
+                            aria-label="حذف المرفق">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
                 {% endfor %}
             </div>
@@ -214,12 +221,43 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;       /* anchor for the absolute-positioned delete button */
 }
 .attachment-thumb img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+}
+/* Floating "x" delete button, top-left corner. RTL still puts it visually
+   at the top-left because we anchor by `top` + `left`. */
+.attachment-delete-btn {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(176, 42, 55, 0.92);
+    color: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    transition: background-color 0.15s ease, transform 0.15s ease;
+    padding: 0;
+    line-height: 1;
+}
+.attachment-delete-btn:hover {
+    background: #8b1c2a;
+    transform: scale(1.08);
+}
+.attachment-delete-btn:focus {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
 }
 .ai-assist-card {
     background: #f7faff;
@@ -352,6 +390,44 @@
                 }
             });
         }
+
+        // ── Attachment delete buttons ─────────────────────────────────
+        // Each thumbnail has an "x" button. We can't use a nested <form>
+        // (the page is wrapped in the main visit form), so we POST via
+        // fetch with the CSRF token then reload to refresh the gallery
+        // and the "X/2" counter.
+        document.querySelectorAll('.attachment-delete-btn').forEach(function (btn) {
+            btn.addEventListener('click', async function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!window.confirm('هل أنت متأكد من حذف هذا المرفق؟ لا يمكن التراجع.')) return;
+
+                const url = btn.dataset.url;
+                const csrfInput = document.querySelector('input[name=csrfmiddlewaretoken]');
+                const csrf = csrfInput ? csrfInput.value : '';
+
+                btn.disabled = true;
+                try {
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrf },
+                        credentials: 'same-origin',
+                        // Append a `next` so the server doesn't redirect us
+                        // away from this page after delete.
+                        body: new URLSearchParams({ next: window.location.pathname }),
+                    });
+                    if (resp.ok || resp.redirected) {
+                        window.location.reload();
+                    } else {
+                        alert('تعذر حذف المرفق. حاول مرة أخرى.');
+                        btn.disabled = false;
+                    }
+                } catch (err) {
+                    alert('خطأ في الاتصال: ' + err.message);
+                    btn.disabled = false;
+                }
+            });
+        });
     });
 </script>
 

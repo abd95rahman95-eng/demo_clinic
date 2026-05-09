@@ -1,0 +1,103 @@
+{% extends 'patients/base.html' %}
+
+{% block title %}الإشعارات | عيادتك{% endblock %}
+
+{% block content %}
+<style>
+    .notif-list { max-width: 760px; margin: 0 auto; }
+    .notif-item {
+        display: block;
+        background: #fff;
+        border: 1px solid #d0e4d5;
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin-bottom: 10px;
+        text-decoration: none;
+        color: inherit;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .notif-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(26, 107, 60, 0.08);
+    }
+    .notif-item.unread {
+        border-right: 4px solid #1a6b3c;
+        background: #f5faf6;
+    }
+    .notif-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1a3d28;
+        margin: 0 0 6px 0;
+    }
+    .notif-body {
+        font-size: 14px;
+        color: #2d5a3d;
+        line-height: 1.7;
+        margin: 0 0 6px 0;
+    }
+    .notif-meta {
+        font-size: 12px;
+        color: #7a9a84;
+    }
+    .notif-empty {
+        background: #fff;
+        border: 1px dashed #c5deca;
+        border-radius: 10px;
+        padding: 40px;
+        text-align: center;
+        color: #5a8a6a;
+    }
+</style>
+
+<div class="notif-list">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 22px;">
+        <h1 style="margin:0; font-size: 26px; color:#1a3d28; font-weight:800;">
+            <i class="fa-solid fa-bell"></i> الإشعارات
+        </h1>
+        {% if notifications %}
+        <button type="button" id="mark-all-read-btn"
+                class="btn-action btn-edit"
+                data-url="{% url 'notifications_mark_all_read' %}">
+            <i class="fa-solid fa-check-double"></i> اعتبار الكل مقروءاً
+        </button>
+        {% endif %}
+    </div>
+
+    {% if notifications %}
+        {% for n in notifications %}
+        <a href="{{ n.url|default:'#' }}" class="notif-item {% if not n.read %}unread{% endif %}">
+            <div class="notif-title">{{ n.title }}</div>
+            {% if n.body %}<div class="notif-body">{{ n.body }}</div>{% endif %}
+            <div class="notif-meta"><i class="fa-regular fa-clock"></i> {{ n.created_at|cut:"T" }}</div>
+        </a>
+        {% endfor %}
+    {% else %}
+        <div class="notif-empty">
+            <i class="fa-solid fa-bell-slash" style="font-size:32px; opacity:0.5; display:block; margin-bottom:10px;"></i>
+            لا توجد إشعارات حالياً.
+        </div>
+    {% endif %}
+</div>
+
+<script>
+(function () {
+    var btn = document.getElementById('mark-all-read-btn');
+    if (!btn) return;
+    btn.addEventListener('click', async function () {
+        var csrf = document.cookie.split('; ').find(function (r) { return r.startsWith('csrftoken='); });
+        csrf = csrf ? csrf.split('=')[1] : '';
+        try {
+            var r = await fetch(btn.dataset.url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'X-CSRFToken': csrf },
+            });
+            if (r.ok) window.location.reload();
+        } catch (e) {
+            alert('تعذر الاتصال — حاول مرة أخرى.');
+        }
+    });
+})();
+</script>
+{% endblock %}

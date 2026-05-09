@@ -337,7 +337,18 @@ class VisitAttachmentForm(forms.ModelForm):
             # save the visit without uploading an image. We strip the HTML
             # `required` attribute as well as setting required=False on the
             # form field below.
-            'image': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            #
+            # `accept="image/*"` keeps the file picker scoped to images.
+            # `capture="environment"` prompts mobile browsers (Chrome/Safari
+            # on Android/iOS) to offer the rear camera as an option in
+            # addition to the gallery — desktop browsers ignore it. This is
+            # what enables the "take a photo" experience requested for
+            # mobile users.
+            'image': forms.ClearableFileInput(attrs={
+                'class': 'form-control',
+                'accept': 'image/*',
+                'capture': 'environment',
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -367,7 +378,9 @@ class SignupRequestForm(forms.ModelForm):
             'clinic_specialty': 'تخصص العيادة',
             'doctor_name': 'اسم الطبيب',
             'doctor_phone': 'رقم هاتف الطبيب',
-            'doctor_email': 'البريد الإلكتروني للطبيب (اختياري)',
+            # Doctor email is mandatory — used to contact the requester
+            # after the signup is reviewed.
+            'doctor_email': 'البريد الإلكتروني للطبيب',
             'nurse_name': 'اسم الممرض (اختياري)',
             'nurse_phone': 'رقم هاتف الممرض (اختياري)',
             'city': 'المدينة أو المنطقة',
@@ -378,9 +391,19 @@ class SignupRequestForm(forms.ModelForm):
             'clinic_specialty': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'أدخل تخصص العيادة'}),
             'doctor_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'أدخل اسم الطبيب'}),
             'doctor_phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'رقم هاتف الطبيب للتواصل'}),
-            'doctor_email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'example@email.com'}),
+            'doctor_email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'example@email.com', 'required': 'required'}),
             'nurse_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'أدخل اسم الممرض إن وجد'}),
             'nurse_phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'رقم هاتف الممرض'}),
             'city': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'مثال: الرقة, شارع 23 شباط'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'أي تفاصيل أو أوقات مفضلة للتواصل...'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Doctor email is mandatory at the form level. The model's EmailField
+        # is non-null already, but we set required=True explicitly so the
+        # browser shows a clear validation message before submit.
+        self.fields['doctor_email'].required = True
+        # The HTML5 `required` attribute is the safety net for non-JS
+        # browsers — keep it on even if the parent template forgets it.
+        self.fields['doctor_email'].widget.attrs['required'] = 'required'

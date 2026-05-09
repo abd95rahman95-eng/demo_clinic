@@ -36,6 +36,29 @@
         animation: fadeIn 0.6s ease-out;
     }
 
+    /* On mobile: zero outer padding, stack vertically with the LOGIN form first.
+       The brand/info side is reordered below the form so users can sign in
+       without scrolling past the marketing block. */
+    @media (max-width: 900px) {
+        .login-container {
+            padding: 0;
+            min-height: calc(100vh - 60px);
+        }
+        .login-wrapper {
+            flex-direction: column;
+            border-radius: 0;
+            border: none;
+            max-width: none;
+            box-shadow: none;
+        }
+        .login-form-side {
+            order: 1;
+        }
+        .login-image-side {
+            order: 2;
+        }
+    }
+
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }
@@ -251,9 +274,6 @@
     }
 
     @media (max-width: 900px) {
-        .login-wrapper {
-            flex-direction: column;
-        }
         .login-image-side {
             padding: 40px;
         }
@@ -410,7 +430,7 @@
                 <!-- Get in touch title -->
                 <h4 style="color: #475569; margin-bottom: 15px; font-size: 15px; font-weight: 600;">للتواصل مع الدعم الفني أو الاستفسار:</h4>
                 <div class="contact-links">
-                    <a href="https://wa.me/963967964600" target="_blank" rel="noopener noreferrer" class="contact-link contact-link-whatsapp">
+                    <a href="https://wa.me/963930540899" target="_blank" rel="noopener noreferrer" class="contact-link contact-link-whatsapp">
                         <i class="fa-brands fa-whatsapp" style="font-size:18px;"></i>
                         واتساب
                     </a>

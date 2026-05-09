@@ -19,6 +19,7 @@ from .specialty_lists import (
 )
 import json as _json_specs
 from django.contrib.auth.models import User
+from django.views.decorators.http import require_POST
 from datetime import date
 
 
@@ -723,12 +724,62 @@ def signup_request_view(request):
     if request.method == "POST":
         form = SignupRequestForm(request.POST)
         if form.is_valid():
-            form.save()
+            instance = form.save()
+            # Email the team about the new signup. We do this AFTER save so a
+            # mailserver outage doesn't block the request from being recorded.
+            try:
+                _notify_signup_team(instance)
+            except Exception:
+                # Never let a mail failure crash the user-facing form. The
+                # request is already saved in the DB and visible to admins.
+                pass
             return render(request, "patients/signup_success.html")
     else:
         form = SignupRequestForm()
 
     return render(request, "patients/signup_request.html", {"form": form})
+
+
+def _notify_signup_team(signup):
+    """Send a plain-text email to SIGNUP_NOTIFY_EMAILS describing a new
+    signup request. Falls back to console backend if SMTP isn't configured
+    so dev never errors.
+    """
+    from django.conf import settings as _settings
+    from django.core.mail import send_mail
+
+    recipients = list(getattr(_settings, 'SIGNUP_NOTIFY_EMAILS', []))
+    if not recipients:
+        return
+
+    subject = f"[Eyadatak] طلب تسجيل عيادة جديد — {signup.clinic_name}"
+    body_lines = [
+        "تم استلام طلب تسجيل عيادة جديد:",
+        "",
+        f"اسم العيادة: {signup.clinic_name}",
+        f"التخصص: {signup.clinic_specialty}",
+        f"المدينة/المنطقة: {signup.city or '—'}",
+        "",
+        f"اسم الطبيب: {signup.doctor_name}",
+        f"هاتف الطبيب: {signup.doctor_phone}",
+        f"بريد الطبيب: {signup.doctor_email}",
+        "",
+        f"اسم الممرض: {signup.nurse_name or '—'}",
+        f"هاتف الممرض: {signup.nurse_phone or '—'}",
+        "",
+        f"ملاحظات إضافية: {signup.notes or '—'}",
+        "",
+        f"تاريخ الطلب: {signup.created_at:%Y-%m-%d %H:%M}",
+    ]
+    body = "\n".join(body_lines)
+
+    send_mail(
+        subject=subject,
+        message=body,
+        from_email=getattr(_settings, 'DEFAULT_FROM_EMAIL', 'info@eyadatak.com'),
+        recipient_list=recipients,
+        fail_silently=False,
+    )
 
 def pricing_view(request):
     return render(request, "patients/pricing.html")
@@ -827,6 +878,136 @@ def contact_us(request):
 
 
 @login_required(login_url='login')
+@require_POST
+def delete_visit_attachment(request, attachment_id):
+    """Remove a single VisitAttachment. Open to doctors and nurses inside
+    the same clinic. The file on disk is deleted as part of the cascade
+    via the model's ImageField storage — Django handles that.
+
+    Redirects back to the page the user came from when possible
+    (doctor_complete_visit / edit_visit / patient_detail) so the user
+    keeps their flow without a manual back-button."""
+    if not (is_doctor(request.user) or is_nurse(request.user)):
+        return redirect('dashboard')
+
+    profile = UserProfile.objects.get(user=request.user)
+    attachment = get_object_or_404(
+        VisitAttachment,
+        id=attachment_id,
+        visit__clinic=profile.clinic,
+    )
+    visit = attachment.visit
+
+    # Remove the underlying image file from storage so we don't leave
+    # orphaned bytes on disk after the row is deleted.
+    try:
+        if attachment.image and attachment.image.name:
+            attachment.image.delete(save=False)
+    except Exception:
+        # Storage hiccup shouldn't prevent the DB row from being removed.
+        pass
+    attachment.delete()
+    messages.success(request, "تم حذف المرفق بنجاح")
+
+    # Decide where to send the user back.
+    next_url = request.POST.get('next') or request.GET.get('next')
+    if next_url:
+        return redirect(next_url)
+
+    if visit.status == 'nurse_draft' and is_doctor(request.user) and visit.assigned_doctor_id == request.user.id:
+        return redirect('doctor_complete_visit', visit_id=visit.id)
+    if visit.status == 'doctor_completed' and is_doctor(request.user):
+        return redirect('edit_visit', id=visit.id)
+    return redirect('patient_detail', id=visit.patient.id)
+
+
+@login_required(login_url='login')
+@require_POST
+def notifications_mark_all_read(request):
+    """Mark every notification visible to the current clinic as read.
+    Triggered by clicking "تم القراءة" / opening the bell, depending on
+    the UI flow chosen on the front-end. Idempotent."""
+    try:
+        profile = request.user.userprofile
+    except UserProfile.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'no_clinic'}, status=400)
+
+    from . import notifications_store
+    try:
+        updated = notifications_store.mark_all_read_for_clinic(profile.clinic.id)
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+    return JsonResponse({'ok': True, 'updated': updated})
+
+
+@login_required(login_url='login')
+def notifications_list(request):
+    """Full-page list of notifications for the current clinic. Linked
+    from the bell footer ("عرض كل الإشعارات")."""
+    try:
+        profile = request.user.userprofile
+    except UserProfile.DoesNotExist:
+        return redirect('dashboard')
+
+    from . import notifications_store
+    items = notifications_store.get_notifications_for_clinic(profile.clinic.id, limit=200)
+    return render(request, 'patients/notifications_list.html', {
+        'notifications': items,
+    })
+
+
+@login_required(login_url='login')
+def notifications_admin(request):
+    """Staff-only page to broadcast a notification to all clinics or to
+    a specific clinic. Lives outside Django admin so superusers can
+    create notifications without leaving the app's UI.
+
+    Permission: only Django superusers / staff can post here. Non-staff
+    users get a 403 redirect to the dashboard."""
+    if not (request.user.is_staff or request.user.is_superuser):
+        return redirect('dashboard')
+
+    from . import notifications_store
+    from .models import Clinic
+
+    sent_msg = None
+    error = None
+
+    if request.method == 'POST':
+        title = (request.POST.get('title') or '').strip()
+        body  = (request.POST.get('body') or '').strip()
+        url   = (request.POST.get('url') or '').strip()
+        target = (request.POST.get('target_clinic_id') or '').strip()
+
+        if not title:
+            error = 'العنوان مطلوب.'
+        else:
+            target_id = None
+            if target:
+                try:
+                    target_id = int(target)
+                    # Validate the clinic exists; ignore otherwise.
+                    if not Clinic.objects.filter(id=target_id).exists():
+                        error = f'العيادة رقم {target_id} غير موجودة.'
+                        target_id = None
+                except ValueError:
+                    error = 'معرف العيادة يجب أن يكون رقماً صحيحاً.'
+            if not error:
+                notifications_store.add_notification(
+                    title=title, body=body, url=url,
+                    target_clinic_id=target_id,
+                )
+                sent_msg = 'تم إرسال الإشعار بنجاح.'
+
+    clinics = Clinic.objects.order_by('clinic_number', 'name')
+    return render(request, 'patients/notifications_admin.html', {
+        'clinics': clinics,
+        'sent_msg': sent_msg,
+        'error': error,
+    })
+
+
+@login_required(login_url='login')
 def clear_appointment(request, visit_id):
     """Mark a follow-up appointment as done by clearing follow_up_date.
     Available to both doctors and nurses for visits in their clinic.
@@ -884,7 +1065,6 @@ def patient_search_api(request):
 # Dental chart support
 # -----------------------------------------------------------------------------
 import json as _json
-from django.views.decorators.http import require_POST
 
 
 def _ensure_dental_chart_inherited(visit):
@@ -1009,8 +1189,23 @@ def _refund_ai_usage(clinic, source):
 
 def _build_visit_snapshot(visit):
     """Compose an Arabic, label:value snapshot of every populated field on
-    the visit, ordered roughly the same way the doctor sees the form."""
+    the visit, ordered roughly the same way the doctor sees the form.
+
+    Two design goals:
+      1. Every non-empty field is forwarded to Claude (no silent drops),
+         so the assistant has the complete picture. Date fields are
+         formatted explicitly so they're not ambiguous.
+      2. We append a separate "تم توفيره مسبقاً" (already provided)
+         summary listing tests/imaging the doctor or nurse has already
+         entered. The system prompt instructs the model to NOT re-suggest
+         anything in that list — fixes the user's complaint that the
+         assistant kept asking for data already present.
+    """
     specialty = visit.clinic.specialty
+
+    # Build an ordered, deduplicated field list. Anything else with a
+    # value gets appended at the end so we never silently drop fields
+    # that aren't in the manifests above (defense-in-depth).
     field_order = (
         ['chief_complaint', 'nursing_notes']
         + get_nursing_fields(specialty)
@@ -1019,31 +1214,93 @@ def _build_visit_snapshot(visit):
         + COMMON_MEDICAL_FIELDS
     )
 
+    # Date-typed fields that need explicit string formatting.
+    DATE_FIELDS = {'follow_up_date', 'last_menstrual_period'}
+
+    # Fields that count as "tests already provided/requested" — used to
+    # build the explicit list at the bottom of the snapshot.
+    TEST_FIELDS = {
+        'lab_requests', 'lab_results',
+        'imaging_requests', 'imaging_results',
+        'ecg_results', 'xray_findings',
+        'ultrasound_notes', 'CT_MRI_findings',
+        'neurological_examination', 'skin_examination',
+    }
+
     lines = []
-    # Patient demographics — useful for differential weighting.
     p = visit.patient
+    # Patient demographics — useful for differential weighting.
     lines.append(f"المريض: {p.name} | العمر: {p.age} | الجنس: {p.get_gender_display()}")
     lines.append(f"نوع الزيارة: {visit.get_visit_type_display()}")
     lines.append("")
     lines.append("بيانات الزيارة:")
 
     seen = set()
+    provided_tests = []
+
+    def _format_value(fname, val):
+        """Render a field value safely. Dates → ISO; else str()."""
+        if val is None:
+            return ''
+        if fname in DATE_FIELDS:
+            try:
+                if hasattr(val, 'strftime'):
+                    if fname == 'follow_up_date':
+                        return val.strftime('%Y-%m-%d %H:%M')
+                    return val.strftime('%Y-%m-%d')
+            except Exception:
+                pass
+        return str(val)
+
+    def _is_empty(val):
+        """Treat None, empty string, and whitespace-only strings as empty.
+        We KEEP zero values (e.g. pain_scale = 0) because they are
+        meaningful clinical data."""
+        if val is None:
+            return True
+        if isinstance(val, str) and not val.strip():
+            return True
+        return False
+
+    # 1) Manifest-driven fields, in the same order the doctor saw them.
     for fname in field_order:
         if fname in seen:
             continue
         seen.add(fname)
         val = getattr(visit, fname, '')
-        if val in (None, '', 0):
-            # 0 is rare here (PositiveSmallIntegerField for pain_scale) — keep
-            # it if present; only skip empty strings/None.
-            if val == 0:
-                pass
-            else:
-                continue
+        if _is_empty(val):
+            continue
         label = FIELD_LABELS.get(fname, fname)
-        if fname == 'follow_up_date' and val:
-            val = val.strftime('%Y-%m-%d %H:%M')
-        lines.append(f"- {label}: {val}")
+        rendered = _format_value(fname, val)
+        lines.append(f"- {label}: {rendered}")
+        if fname in TEST_FIELDS:
+            provided_tests.append(label)
+
+    # 2) Defense-in-depth — anything else on the model that's set and
+    # has a known label, but didn't appear in the manifests, is still
+    # forwarded so the AI never says "you forgot to include X".
+    for fname, label in FIELD_LABELS.items():
+        if fname in seen:
+            continue
+        val = getattr(visit, fname, None)
+        if _is_empty(val):
+            continue
+        seen.add(fname)
+        rendered = _format_value(fname, val)
+        lines.append(f"- {label}: {rendered}")
+        if fname in TEST_FIELDS:
+            provided_tests.append(label)
+
+    # 3) Explicit list of tests/imaging already provided so the model can
+    # reliably skip them when suggesting required investigations.
+    if provided_tests:
+        lines.append("")
+        lines.append("ملاحظة للنموذج — الفحوصات التي تم طلبها أو إدخال نتائجها مسبقاً (لا تكررها في اقتراحاتك):")
+        for label in provided_tests:
+            lines.append(f"  • {label}")
+    else:
+        lines.append("")
+        lines.append("ملاحظة للنموذج — لم يتم طلب أو إدخال أي فحوصات/صور بعد.")
 
     return "\n".join(lines)
 

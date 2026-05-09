@@ -155,6 +155,78 @@
     }
     .info-block .info-line .k { color: #5a8a6a; font-weight: 600; }
     .info-block .info-line .v { color: #1a1a2e; font-weight: 700; }
+
+    /* ─── Sham-Cash payment card ────────────────────────────────────── */
+    .shamcash-card {
+        margin-top: 22px;
+        grid-column: 1 / -1;        /* span full width inside .account-grid */
+    }
+    .shamcash-body {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 22px;
+        align-items: start;
+    }
+    @media (max-width: 700px) {
+        .shamcash-body {
+            grid-template-columns: 1fr;
+        }
+    }
+    .shamcash-qr-wrap {
+        background: #f8fbf9;
+        border: 1px solid #e1ece5;
+        border-radius: 10px;
+        padding: 12px;
+        text-align: center;
+    }
+    .shamcash-qr-wrap img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 0 auto;
+        border-radius: 6px;
+    }
+    .shamcash-qr-caption {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #5a8a6a;
+        font-weight: 600;
+    }
+    .shamcash-instructions h3 {
+        margin: 0 0 10px 0;
+        font-size: 15px;
+        color: #1a3d28;
+    }
+    .shamcash-instructions ol {
+        padding-right: 20px;
+        margin: 0 0 14px 0;
+        color: #2d5a3d;
+        font-size: 14px;
+        line-height: 1.9;
+    }
+    .shamcash-instructions ol li b {
+        color: #1a6b3c;
+    }
+    .shamcash-clinic-num {
+        display: inline-block;
+        background: #fff7d6;
+        border: 1px dashed #d4a900;
+        color: #7a5500;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-weight: 800;
+        font-size: 14px;
+        letter-spacing: 0.5px;
+    }
+    .shamcash-note {
+        background: #eaf4fb;
+        border: 1px solid #c7dcee;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 13px;
+        color: #1a3a6b;
+        line-height: 1.7;
+    }
 </style>
 
 <div class="account-wrap">
@@ -268,6 +340,43 @@
                     <i class="fa-solid fa-floppy-disk"></i> حفظ كلمة المرور الجديدة
                 </button>
             </form>
+        </div>
+
+        {# ─── Sham-Cash QR for subscription payments ───────────────── #}
+        <div class="account-card shamcash-card">
+            <h2><i class="fa-solid fa-qrcode"></i> الدفع عبر شام كاش</h2>
+
+            <div class="shamcash-body">
+                <div class="shamcash-qr-wrap">
+                    <img src="{% static 'patients/images/shamcash.jpg' %}" alt="رمز شام كاش">
+                    <div class="shamcash-qr-caption">رمز QR لشام كاش</div>
+                </div>
+
+                <div class="shamcash-instructions">
+                    <h3>طريقة الدفع</h3>
+                    <ol>
+                        <li>افتح تطبيق <b>شام كاش</b> على هاتفك.</li>
+                        <li>اختر «<b>إرسال</b>» ثم «<b>مسح رمز QR</b>» وامسح الرمز الظاهر بجانب هذه التعليمات.</li>
+                        <li>أدخل المبلغ المطلوب حسب الباقة المختارة من <a href="{% url 'pricing' %}">صفحة الباقات</a>.</li>
+                        <li>
+                            في حقل <b>«ملاحظات / رسالة الحوالة»</b> اكتب <b>رقم العيادة</b> الخاص بك:
+                            {% if clinic and clinic.clinic_number %}
+                            <span class="shamcash-clinic-num">{{ clinic.clinic_number }}</span>
+                            {% else %}
+                            <span class="shamcash-clinic-num">— غير محدد —</span>
+                            {% endif %}
+                        </li>
+                        <li>قم بإرسال الحوالة وانتظر تأكيد التفعيل من فريقنا.</li>
+                    </ol>
+
+                    <div class="shamcash-note">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <b>أين أجد رقم العيادة؟</b>
+                        ستجده في أعلى هذه الصفحة ضمن «حالة الاشتراك» — حقل «رقم العيادة».
+                        كتابة الرقم في رسالة الحوالة ضروري حتى نتمكن من ربط الدفعة بحسابك مباشرة.
+                    </div>
+                </div>
+            </div>
         </div>
 
     </div>

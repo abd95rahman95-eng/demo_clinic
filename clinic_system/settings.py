@@ -214,12 +214,12 @@ EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS       = os.environ.get("EMAIL_USE_TLS", "True") == "True"
 DEFAULT_FROM_EMAIL  = os.environ.get(
     "DEFAULT_FROM_EMAIL",
-    "Eyadatak <noreply@eyadatak.com>",
+    "Eyadatak <info@eyadatak.com>",
 )
 # Where signup notifications get delivered. Comma-separated for multiple.
 SIGNUP_NOTIFY_EMAILS = [
     e.strip() for e in os.environ.get(
         "SIGNUP_NOTIFY_EMAILS",
-        "support@eyadatak.com",
+        "signup@eyadatak.com",
     ).split(",") if e.strip()
 ]

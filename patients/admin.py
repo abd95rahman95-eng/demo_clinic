@@ -252,18 +252,16 @@ class ClinicAdmin(admin.ModelAdmin):
 class NotificationAdmin(admin.ModelAdmin):
     """Notification admin — usually staff manage notifications via the
     in-app page at /patients/notifications/admin/, but registering here
-    gives Django superusers a fallback view with full filtering / search
-    / read-tracker visibility."""
-    list_display = (
-        "title",
-        "target_display",
-        "created_at",
-        "read_count",
-    )
-    list_filter = ("created_at",)
+    gives Django superusers a fallback view.
+
+    Kept intentionally minimal: the changelist uses only plain fields and
+    safe display methods (no format_html, no M2M counts on the row) so
+    it never crashes when a row has target_clinic = None (broadcast).
+    """
+    list_display = ("title", "target_label", "created_at")
+    list_filter = ("target_clinic", "created_at")
     search_fields = ("title", "body")
     raw_id_fields = ("target_clinic",)
-    filter_horizontal = ("read_by_clinics",)
     readonly_fields = ("created_at", "updated_at")
     ordering = ("-created_at",)
 
@@ -278,27 +276,24 @@ class NotificationAdmin(admin.ModelAdmin):
                 "اختر عيادة محددة لتقييد ظهور الإشعار."
             ),
         }),
-        ("حالة القراءة", {
-            "fields": ("read_by_clinics",),
-            "classes": ("collapse",),
-        }),
         ("بيانات النظام", {
             "fields": ("created_at", "updated_at"),
             "classes": ("collapse",),
         }),
     )
 
-    @admin.display(description="المستهدف")
-    def target_display(self, obj):
-        if obj.target_clinic_id:
-            return obj.target_clinic.name
-        return format_html(
-            '<span style="padding:2px 8px;border-radius:999px;background:#dbeafe;color:#1d4ed8;">جميع العيادات</span>'
-        )
+    def get_queryset(self, request):
+        # Pre-fetch the FK so the changelist doesn't fire one query per
+        # row — also makes target_clinic access cheap & safe even when
+        # the FK is NULL (broadcast).
+        return super().get_queryset(request).select_related("target_clinic")
 
-    @admin.display(description="عدد القراءات")
-    def read_count(self, obj):
-        return obj.read_by_clinics.count()
+    @admin.display(description="المستهدف", ordering="target_clinic")
+    def target_label(self, obj):
+        # Plain text only — no format_html. Broadcast = "جميع العيادات".
+        if obj.target_clinic_id and obj.target_clinic is not None:
+            return obj.target_clinic.name
+        return "جميع العيادات"
 
 
 @admin.register(SignupRequest)

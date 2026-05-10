@@ -107,7 +107,9 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'cloudinary_storage',
     'django.contrib.staticfiles',
+    'cloudinary',
     'patients',
 ]
 
@@ -186,11 +188,47 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# ─── Media storage (Cloudinary) ──────────────────────────────────────────
+# Visit attachments and other ImageField/FileField uploads are stored on
+# Cloudinary instead of the local disk. This is critical on Render, whose
+# filesystem is ephemeral — anything written to /media gets wiped on every
+# redeploy.
+#
+# We configure the three values explicitly (cloud_name / api_key / api_secret)
+# instead of relying on CLOUDINARY_URL, because secrets often contain chars
+# (+ / = :) that need URL-encoding inside the combined URL form and silently
+# produce "Invalid Signature" errors when not encoded.
+#
+# If the credentials are NOT set, fall back to local FileSystemStorage so
+# the dev server still works without Cloudinary creds.
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": os.environ.get("CLOUDINARY_CLOUD_NAME", ""),
+    "API_KEY":    os.environ.get("CLOUDINARY_API_KEY", ""),
+    "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET", ""),
+}
+
+USE_CLOUDINARY = all(CLOUDINARY_STORAGE.values())
+
+if USE_CLOUDINARY:
+    DEFAULT_FILE_STORAGE_BACKEND = "cloudinary_storage.storage.MediaCloudinaryStorage"
+    # Also configure the cloudinary SDK directly so any direct uploader.upload()
+    # calls (outside Django storage) use the same creds.
+    import cloudinary as _cloudinary
+    _cloudinary.config(
+        cloud_name=CLOUDINARY_STORAGE["CLOUD_NAME"],
+        api_key=CLOUDINARY_STORAGE["API_KEY"],
+        api_secret=CLOUDINARY_STORAGE["API_SECRET"],
+        secure=True,
+    )
+else:
+    DEFAULT_FILE_STORAGE_BACKEND = "django.core.files.storage.FileSystemStorage"
+
 STORAGES = {
     # Default storage — used by ImageField/FileField uploads (visit attachments).
     # Django 6.x requires this key to be present explicitly.
     "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "BACKEND": DEFAULT_FILE_STORAGE_BACKEND,
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
@@ -198,6 +236,9 @@ STORAGES = {
 }
 
 # Media (uploaded files — visit attachments)
+# When Cloudinary is in use, MEDIA_URL/MEDIA_ROOT are effectively unused for
+# new uploads (Cloudinary returns its own absolute URLs), but we keep them
+# defined so any legacy local files still resolve under /media/.
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / "media"
 

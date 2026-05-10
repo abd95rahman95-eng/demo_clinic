@@ -107,8 +107,16 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'cloudinary_storage',
+    # IMPORTANT: keep `django.contrib.staticfiles` BEFORE `cloudinary_storage`.
+    # When cloudinary_storage comes first, it overrides the `collectstatic`
+    # management command with its own version, which references the old
+    # `STATICFILES_STORAGE` setting removed in Django 6 — this crashes the
+    # build on Render with `AttributeError: 'Settings' object has no attribute
+    # 'STATICFILES_STORAGE'`. Putting staticfiles first makes Django's
+    # built-in collectstatic win, which is what we want (static files are
+    # served by Whitenoise; only media goes to Cloudinary).
     'django.contrib.staticfiles',
+    'cloudinary_storage',
     'cloudinary',
     'patients',
 ]

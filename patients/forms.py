@@ -378,8 +378,6 @@ class SignupRequestForm(forms.ModelForm):
             'clinic_specialty': 'تخصص العيادة',
             'doctor_name': 'اسم الطبيب',
             'doctor_phone': 'رقم هاتف الطبيب',
-            # Doctor email is mandatory — used to contact the requester
-            # after the signup is reviewed.
             'doctor_email': 'البريد الإلكتروني للطبيب',
             'nurse_name': 'اسم الممرض (اختياري)',
             'nurse_phone': 'رقم هاتف الممرض (اختياري)',
@@ -394,7 +392,7 @@ class SignupRequestForm(forms.ModelForm):
             'doctor_email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'example@email.com', 'required': 'required'}),
             'nurse_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'أدخل اسم الممرض إن وجد'}),
             'nurse_phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'رقم هاتف الممرض'}),
-            'city': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'مثال: الرقة, شارع 23 شباط'}),
+            'city': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'المدينة أو المنطقة/اسم الشارع'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'أي تفاصيل أو أوقات مفضلة للتواصل...'}),
         }
 

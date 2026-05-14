@@ -1,14 +1,15 @@
 import logging
 import os
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.http import JsonResponse
-from .models import Patient, Visit, UserProfile, VisitAttachment, ToothCondition, Notification, Clinic
+from .models import Patient, Visit, UserProfile, VisitAttachment, ToothCondition, Notification, Clinic, Appointment
 from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
-from .forms import PatientForm, NurseVisitForm, DoctorVisitForm, VisitAttachmentForm, SignupRequestForm
+from .forms import PatientForm, NurseVisitForm, DoctorVisitForm, VisitAttachmentForm, SignupRequestForm, AppointmentForm
 from .specialty_lists import (
     get_quick_picks,
     get_nursing_fields,
@@ -65,6 +66,13 @@ def dashboard_view(request):
         status='nurse_draft'
     ).order_by('-created_at')
 
+    # "زيارات الاستشارة" — visits the doctor saved with the "حفظ كاستشارة"
+    # save mode. Half-completed, awaiting specialist / lab / imaging.
+    consultation_visits = Visit.objects.filter(
+        clinic=profile.clinic,
+        status='consultation_pending'
+    ).order_by('-updated_at')
+
     if is_doctor(request.user):
         user_role = 'طبيب'
     elif is_nurse(request.user):
@@ -74,11 +82,42 @@ def dashboard_view(request):
 
     today = date.today()
 
-    # Today's bookings (visits whose follow_up appointment is today)
-    todays_bookings = Visit.objects.filter(
+    # Today's bookings — unified list combining BOTH sources:
+    #   1. Visit.follow_up_date == today  (legacy follow-up bookings tied to a Visit)
+    #   2. Appointment.scheduled_at__date == today  (booked appointments via the
+    #      "احجز موعد" button, which is the modern, Visit-independent flow)
+    # Each entry is normalized to a dict with: kind, id, patient, time, kind_label.
+    # The template uses `kind` to route the "تم" / "ادخال" buttons to the right
+    # backend handler (visit follow-up clears follow_up_date, appointment marks
+    # status='done').
+    todays_bookings = []
+    visit_followups_today = Visit.objects.filter(
         patient__clinic=profile.clinic,
         follow_up_date__date=today
     ).order_by('follow_up_date')
+    for v in visit_followups_today:
+        todays_bookings.append({
+            'kind':       'visit',
+            'id':         v.id,
+            'patient':    v.patient,
+            'time':       v.follow_up_date,
+            'kind_label': 'مراجعة',
+        })
+    booked_today = Appointment.objects.filter(
+        clinic=profile.clinic,
+        scheduled_at__date=today,
+        status='scheduled',
+    ).order_by('scheduled_at')
+    for a in booked_today:
+        todays_bookings.append({
+            'kind':       'appointment',
+            'id':         a.id,
+            'patient':    a.patient,
+            'time':       a.scheduled_at,
+            'kind_label': a.get_appt_type_display(),
+        })
+    # Single chronological ordering across both sources.
+    todays_bookings.sort(key=lambda b: b['time'])
 
     days_ar = {
         'Monday': 'الاثنين',
@@ -107,6 +146,26 @@ def dashboard_view(request):
 
     formatted_date = f"{days_ar[today.strftime('%A')]} {today.day} {months_ar[today.month]}"
 
+    # Week-ahead booking count for the calendar card preview badge.
+    # Includes both real Appointments and Visit follow-ups (which now also
+    # render on the calendar as "مراجعة").
+    from datetime import timedelta as _td
+    week_start = today
+    week_end = today + _td(days=7)
+    upcoming_appointments_count = (
+        Appointment.objects.filter(
+            clinic=profile.clinic,
+            scheduled_at__date__gte=week_start,
+            scheduled_at__date__lt=week_end,
+            status='scheduled',
+        ).count()
+        + Visit.objects.filter(
+            patient__clinic=profile.clinic,
+            follow_up_date__date__gte=week_start,
+            follow_up_date__date__lt=week_end,
+        ).count()
+    )
+
     return render(request, 'patients/dashboard.html', {
         'clinic_name': profile.clinic.name,
         'user_role': user_role,
@@ -114,12 +173,15 @@ def dashboard_view(request):
         'patients_count': patients.count(),
         'visits_count': completed_visits.count(),
         'pending_visits_count': pending_visits.count(),
+        'consultation_visits_count': consultation_visits.count(),
+        'consultation_visits': consultation_visits[:5],
+        'upcoming_appointments_count': upcoming_appointments_count,
         'next_patient_visit': pending_visits.order_by('created_at').first(),
         'latest_patients': patients[:5],
         'latest_completed_visits': completed_visits[:5],
         'latest_pending_visits': pending_visits.order_by('created_at')[:5],
         'todays_bookings': todays_bookings,
-        'todays_bookings_count': todays_bookings.count(),
+        'todays_bookings_count': len(todays_bookings),
         'is_doctor': is_doctor(request.user),
         'is_nurse': is_nurse(request.user),
     })
@@ -232,25 +294,64 @@ def doctor_complete_visit(request, visit_id):
         attachment_form = VisitAttachmentForm(request.POST, request.FILES)
         if form.is_valid():
             visit = form.save(commit=False)
-            visit.status = 'doctor_completed'
+            # Three save modes, controlled by the `save_mode` hidden input
+            # set on the chosen submit button:
+            #   ''                = حفظ (default — visit fully completed)
+            #   'print_rx'        = حفظ + طباعة الوصفة (same as default but
+            #                       redirects to the A5 print page after save)
+            #   'consultation'    = حفظ كاستشارة (status = consultation_pending,
+            #                       half-completed, awaiting referral)
+            save_mode = (request.POST.get('save_mode') or '').strip()
+            if save_mode == 'consultation':
+                visit.status = 'consultation_pending'
+            else:
+                visit.status = 'doctor_completed'
             visit.save()
-            messages.success(request, "تم إكمال الزيارة بنجاح")
+            if save_mode == 'consultation':
+                messages.success(request, "تم حفظ الزيارة كاستشارة (قيد الانتظار).")
+            elif save_mode == 'print_rx':
+                messages.success(request, "تم حفظ الزيارة. سيتم فتح الوصفة للطباعة.")
+            else:
+                messages.success(request, "تم إكمال الزيارة بنجاح")
 
-            if attachment_form.is_valid() and attachment_form.cleaned_data.get('image'):
-                # Hard cap: max 2 attachments per visit (UI hides the input
-                # when full, this is the server-side guard).
-                if visit.attachments.count() >= 2:
+            # ── Multi-file upload ────────────────────────────────────────
+            # The template renders one camera input + one gallery input.
+            # Each can carry multiple files (HTML5 `multiple`), and the
+            # backend caps the total at 2 attachments per visit.
+            # We pull files from BOTH fields manually since Django's
+            # ClearableFileInput only captures the first file via the
+            # ModelForm; getlist() returns all of them.
+            uploaded_files = []
+            for field_name in ('image', 'image_gallery'):
+                uploaded_files.extend(request.FILES.getlist(field_name))
+
+            remaining_slots = max(0, 2 - visit.attachments.count())
+            if uploaded_files and remaining_slots == 0:
+                messages.warning(
+                    request,
+                    "لا يمكن إضافة أكثر من مرفقين لهذه الزيارة."
+                )
+            else:
+                added = 0
+                for f in uploaded_files[:remaining_slots]:
+                    attachment = VisitAttachment(
+                        visit=visit,
+                        image=f,
+                        uploaded_by=request.user,
+                    )
+                    attachment.save()
+                    added += 1
+                if added:
+                    messages.success(request, f"تمت إضافة {added} مرفق(ات).")
+                if len(uploaded_files) > remaining_slots:
                     messages.warning(
                         request,
-                        "لا يمكن إضافة أكثر من مرفقين لهذه الزيارة."
+                        "تم تجاوز الحد الأقصى للمرفقات (2). تم رفع جزء فقط من الملفات."
                     )
-                else:
-                    attachment = attachment_form.save(commit=False)
-                    attachment.visit = visit
-                    attachment.uploaded_by = request.user
-                    attachment.save()
-                    messages.success(request, "تم إضافة المرفق بنجاح")
 
+            # Redirect by save_mode.
+            if save_mode == 'print_rx':
+                return redirect('print_prescription', visit_id=visit.id)
             return redirect('patient_detail', id=visit.patient.id)
 
     else:
@@ -336,6 +437,13 @@ def patient_list(request):
                 visit_status = 'مكتملة'
                 card_class = 'patient-completed'
                 status_key = 'completed'
+            elif last_visit.status == 'consultation_pending':
+                # "Save with consultation" — half-completed visit waiting on
+                # specialist / lab / imaging input. Exposed as its own filter
+                # chip on the patient list so reception can find them fast.
+                visit_status = 'استشارة قيد الانتظار'
+                card_class = 'patient-consultation'
+                status_key = 'consultation'
             else:
                 visit_status = 'غير معروفة'
                 card_class = 'patient-none'
@@ -387,9 +495,12 @@ def patient_detail(request, id):
     sort_order = request.GET.get('sort', 'newest')
 
     if is_doctor(request.user):
+        # Show fully-completed visits AND consultation-pending visits in the
+        # same timeline. The template paints a different header on
+        # consultation_pending rows so the doctor can spot them at a glance.
         visits_query = Visit.objects.filter(
             patient=patient,
-            status='doctor_completed'
+            status__in=['doctor_completed', 'consultation_pending']
         )
         if sort_order == 'oldest':
             visits = visits_query.order_by('created_at')
@@ -429,6 +540,40 @@ def patient_detail(request, id):
         for v in visits:
             _attach_present_vitals(v)
 
+    # ── Upcoming bookings (FROM NOW, looking forward) ─────────────────
+    # Two sources merged into one chronological list so the section shows
+    # BOTH booked appointments and Visit follow-up dates:
+    #   1. Appointment rows with status='scheduled' and scheduled_at in the
+    #      future (the modern booking flow via "احجز موعد").
+    #   2. Visit rows with follow_up_date in the future (legacy follow-ups
+    #      saved on the visit itself).
+    # Each entry is normalized to a dict so the template doesn't have to
+    # branch on type. `cancel_url` differs per kind: appointments go through
+    # `cancel_appointment`; follow-ups through `clear_appointment` (which
+    # just nulls the field).
+    from django.utils import timezone as _tz
+    now = _tz.now()
+    upcoming_bookings = []
+    for a in patient.appointments.filter(scheduled_at__gte=now, status='scheduled').order_by('scheduled_at'):
+        upcoming_bookings.append({
+            'kind':        'appointment',
+            'time':        a.scheduled_at,
+            'type_label':  a.get_appt_type_display(),
+            'notes':       a.notes,
+            'cancel_url':  reverse('cancel_appointment', args=[a.id]),
+            'cancel_msg':  'إلغاء هذا الموعد؟',
+        })
+    for v in Visit.objects.filter(patient=patient, follow_up_date__gte=now).order_by('follow_up_date'):
+        upcoming_bookings.append({
+            'kind':        'follow_up',
+            'time':        v.follow_up_date,
+            'type_label':  'مراجعة',
+            'notes':       '',
+            'cancel_url':  reverse('clear_appointment', args=[v.id]),
+            'cancel_msg':  'إزالة موعد المراجعة؟',
+        })
+    upcoming_bookings.sort(key=lambda b: b['time'])
+
     return render(request, 'patients/patient_detail.html', {
         'patient': patient,
         'pending_visit': pending_visit,
@@ -441,6 +586,7 @@ def patient_detail(request, id):
         'vitals_specs': vitals_specs,
         'nursing_text_specs': nursing_text_specs,
         'medical_specs': medical_specs,
+        'upcoming_bookings': upcoming_bookings,
     })
 
 
@@ -549,7 +695,10 @@ def edit_visit(request, id):
     if visit.clinic != profile.clinic:
         return redirect('patient_list')
 
-    if visit.status != 'doctor_completed':
+    # Allow editing visits that are either fully completed OR saved as a
+    # consultation (half-completed, awaiting referral). Nurse drafts still
+    # go through the doctor_complete_visit flow.
+    if visit.status not in ('doctor_completed', 'consultation_pending'):
         messages.error(request, "لا يمكن تعديل زيارة غير مكتملة.")
         return redirect('doctor_pending_visits')
 
@@ -565,8 +714,24 @@ def edit_visit(request, id):
 
     if request.method == 'POST':
         if form.is_valid():
-            form.save()
-            messages.success(request, "تم تعديل الزيارة بنجاح")
+            # Save modes (mirror of doctor_complete_visit):
+            #   ''             → status = doctor_completed (normal save)
+            #   'consultation' → status = consultation_pending (still half-done)
+            # The doctor can edit a consultation_pending visit and SAVE normally
+            # to promote it to doctor_completed. Conversely a completed visit
+            # can be flipped back to consultation_pending via "حفظ كاستشارة".
+            save_mode = (request.POST.get('save_mode') or '').strip()
+            visit = form.save(commit=False)
+            if save_mode == 'consultation':
+                visit.status = 'consultation_pending'
+            else:
+                visit.status = 'doctor_completed'
+            visit.save()
+
+            if save_mode == 'consultation':
+                messages.success(request, "تم حفظ التعديلات كاستشارة قيد الانتظار.")
+            else:
+                messages.success(request, "تم تعديل الزيارة بنجاح")
 
             # Save a new attachment if the doctor selected one. Empty file
             # input is a no-op — keeps existing attachments untouched.
@@ -1164,6 +1329,67 @@ def clear_appointment(request, visit_id):
 
 
 # -----------------------------------------------------------------------------
+# Unified booking handlers — used by the dashboard "حجوزات اليوم" buttons.
+# `kind` is either 'visit' (Visit.follow_up_date — legacy follow-up booking)
+# or 'appointment' (Appointment row — modern booking flow via "احجز موعد").
+# clear_booking → just removes from today's list.
+# enter_booking → removes from today's list AND opens a fresh nurse_draft
+#                 for the patient (the "ادخال" button).
+# -----------------------------------------------------------------------------
+def _resolve_booking_or_redirect(request, kind, item_id):
+    """Return (patient, cleanup_callable) for the given booking, or None on
+    permission/lookup failure (in which case the caller should redirect to
+    dashboard). Raises on bad `kind`."""
+    profile = UserProfile.objects.get(user=request.user)
+    if kind == 'visit':
+        visit = get_object_or_404(Visit, id=item_id, patient__clinic=profile.clinic)
+        def _cleanup():
+            visit.follow_up_date = None
+            visit.save(update_fields=['follow_up_date', 'updated_at'])
+        return visit.patient, _cleanup
+    elif kind == 'appointment':
+        appt = get_object_or_404(Appointment, id=item_id, clinic=profile.clinic)
+        def _cleanup():
+            appt.status = 'done'
+            appt.save(update_fields=['status', 'updated_at'])
+        return appt.patient, _cleanup
+    return None, None
+
+
+@login_required(login_url='login')
+@require_POST
+def clear_booking(request, kind, item_id):
+    """Remove a booking (Visit follow-up OR Appointment) from today's list.
+    Wired to the "لم يحضر" (didn't attend) button — clears the booking
+    without creating any visit."""
+    if not (is_doctor(request.user) or is_nurse(request.user)):
+        return redirect('dashboard')
+    patient, cleanup = _resolve_booking_or_redirect(request, kind, item_id)
+    if patient is None:
+        return redirect('dashboard')
+    cleanup()
+    messages.success(request, "تمت إزالة الموعد من قائمة اليوم (المريض لم يحضر).")
+    return redirect('dashboard')
+
+
+@login_required(login_url='login')
+@require_POST
+def enter_booking(request, kind, item_id):
+    """Mark booking done AND open a new nurse-draft for the patient.
+    Wired to the "ادخال" button on the dashboard. After clearing the booking
+    we redirect to nurse_create_visit, which will either show the form or
+    bounce back to patient_detail if there's already a pending visit."""
+    if not (is_doctor(request.user) or is_nurse(request.user)):
+        return redirect('dashboard')
+    patient, cleanup = _resolve_booking_or_redirect(request, kind, item_id)
+    if patient is None:
+        return redirect('dashboard')
+    cleanup()
+    messages.success(request, "تم إدخال المريض — يمكن الآن تسجيل البيانات التمريضية.")
+    return redirect('nurse_create_visit', patient_id=patient.id)
+
+
+# -----------------------------------------------------------------------------
 # Live patient search API (used by the navbar search-as-you-type)
 # Returns up to 8 matches as JSON.
 # Matching is space-insensitive and alef-insensitive (see _normalize_arabic).
@@ -1367,7 +1593,7 @@ def _build_visit_snapshot(visit):
     lines = []
     p = visit.patient
     # Patient demographics — useful for differential weighting.
-    lines.append(f"المريض: {p.name} | العمر: {p.age} | الجنس: {p.get_gender_display()}")
+    lines.append(f"المريض: {p.name} | العمر: {p.age_years or p.age or '—'} | الجنس: {p.get_gender_display()}")
     lines.append(f"نوع الزيارة: {visit.get_visit_type_display()}")
     lines.append("")
     lines.append("بيانات الزيارة:")
@@ -1581,5 +1807,198 @@ def ai_medical_assistance(request, visit_id):
         'daily_remaining': clinic.ai_daily_remaining,
         'credits_remaining': clinic.ai_credits or 0,
     })
+
+# -----------------------------------------------------------------------------
+# Appointment booking (doctor + nurse) + weekly calendar
+# -----------------------------------------------------------------------------
+@login_required(login_url='login')
+def book_appointment_picker(request):
+    """Dedicated patient picker for the "حجز موعد" dashboard card.
+
+    Renders a list-view of every patient in the clinic with a client-side
+    filter input on top. Clicking a row goes DIRECTLY to book_appointment
+    (NOT patient_detail) so the doctor/nurse can pick a patient and book
+    in two clicks. Distinct from the navbar's global search-as-you-type
+    (which always opens patient_detail).
+    """
+    if not (is_doctor(request.user) or is_nurse(request.user)):
+        return redirect('dashboard')
+    profile = UserProfile.objects.get(user=request.user)
+    patients = Patient.objects.filter(clinic=profile.clinic).order_by('name')
+    return render(request, 'patients/book_appointment_picker.html', {
+        'patients': patients,
+    })
+
+
+@login_required(login_url='login')
+def book_appointment(request, patient_id):
+    """Doctors AND nurses can book an appointment for a patient. Reached from
+    the patient_detail page (the "احجز موعد" button) and from the dashboard
+    "احجز موعد" card (which lands on a patient picker page first — for now
+    we route directly to the patient list with an `?action=book` flag handled
+    on the patient_list template)."""
+    if not (is_doctor(request.user) or is_nurse(request.user)):
+        return redirect('dashboard')
+
+    profile = UserProfile.objects.get(user=request.user)
+    patient = get_object_or_404(Patient, id=patient_id, clinic=profile.clinic)
+
+    if request.method == 'POST':
+        form = AppointmentForm(request.POST)
+        if form.is_valid():
+            appt = form.save(commit=False)
+            appt.clinic = profile.clinic
+            appt.patient = patient
+            appt.created_by = request.user
+            appt.save()
+            messages.success(request, "تم حجز الموعد بنجاح.")
+            return redirect('patient_detail', id=patient.id)
+    else:
+        form = AppointmentForm()
+
+    return render(request, 'patients/book_appointment.html', {
+        'form': form,
+        'patient': patient,
+    })
+
+
+@login_required(login_url='login')
+def calendar_view(request):
+    """Weekly calendar of scheduled appointments. Navigation via `?week=YYYY-MM-DD`
+    where the value is the Saturday at the start of the desired week (Arabic
+    week convention). Defaults to current week."""
+    from datetime import timedelta as _td, datetime as _dt
+    if not request.user.is_authenticated:
+        return redirect('login')
+
+    profile = UserProfile.objects.get(user=request.user)
+    today = date.today()
+
+    # Compute "week start" — we use Saturday as the start of the week to
+    # match Arabic/Levantine convention. Python's weekday(): Mon=0..Sun=6,
+    # so Sat=5. Offset from today back to nearest Saturday.
+    raw_week = (request.GET.get('week') or '').strip()
+    if raw_week:
+        try:
+            start = _dt.strptime(raw_week, '%Y-%m-%d').date()
+        except ValueError:
+            start = today - _td(days=(today.weekday() + 2) % 7)
+    else:
+        start = today - _td(days=(today.weekday() + 2) % 7)
+
+    days = []
+    for offset in range(7):
+        d = start + _td(days=offset)
+        # 1) Real Appointment rows (modern booking flow).
+        appts = Appointment.objects.filter(
+            clinic=profile.clinic,
+            scheduled_at__date=d,
+            status='scheduled',
+        ).order_by('scheduled_at')
+        # 2) Visit follow-ups — older, Visit-tied bookings shown as "مراجعة".
+        followups = Visit.objects.filter(
+            patient__clinic=profile.clinic,
+            follow_up_date__date=d,
+        ).order_by('follow_up_date')
+
+        # Normalize both into a single shape the template can render
+        # without branching:
+        #   { kind, time, patient, type_label, cancel_url, cancel_confirm }
+        items = []
+        for a in appts:
+            items.append({
+                'kind': 'appointment',
+                'time': a.scheduled_at,
+                'patient': a.patient,
+                'type_label': a.get_appt_type_display(),
+                'cancel_url': reverse('cancel_appointment', args=[a.id]),
+                'cancel_confirm': 'إلغاء هذا الموعد؟',
+            })
+        for v in followups:
+            items.append({
+                'kind': 'follow_up',
+                'time': v.follow_up_date,
+                'patient': v.patient,
+                'type_label': 'مراجعة',
+                # Reusing the legacy clear endpoint — it just nulls follow_up_date.
+                'cancel_url': reverse('clear_appointment', args=[v.id]),
+                'cancel_confirm': 'إزالة المراجعة من التقويم؟',
+            })
+        items.sort(key=lambda it: it['time'])
+
+        days.append({
+            'date': d,
+            'is_today': d == today,
+            'appointments': items,
+        })
+
+    return render(request, 'patients/calendar.html', {
+        'days': days,
+        'week_start': start,
+        'prev_week': (start - _td(days=7)).strftime('%Y-%m-%d'),
+        'next_week': (start + _td(days=7)).strftime('%Y-%m-%d'),
+        'today_iso': today.strftime('%Y-%m-%d'),
+    })
+
+
+@login_required(login_url='login')
+@require_POST
+def cancel_appointment(request, appointment_id):
+    """Mark an appointment as cancelled. Reachable from the calendar view."""
+    if not (is_doctor(request.user) or is_nurse(request.user)):
+        return redirect('dashboard')
+    profile = UserProfile.objects.get(user=request.user)
+    appt = get_object_or_404(Appointment, id=appointment_id, clinic=profile.clinic)
+    appt.status = 'cancelled'
+    appt.save(update_fields=['status', 'updated_at'])
+    messages.success(request, "تم إلغاء الموعد.")
+    next_url = request.POST.get('next')
+    if next_url:
+        return redirect(next_url)
+    return redirect('calendar')
+
+
+# -----------------------------------------------------------------------------
+# A5 prescription print
+# -----------------------------------------------------------------------------
+@login_required(login_url='login')
+def print_prescription(request, visit_id):
+    """Render an A5-formatted prescription for a single visit. Designed to
+    auto-open the browser print dialog. Only available to doctors inside the
+    same clinic."""
+    if not is_doctor(request.user):
+        return redirect('dashboard')
+
+    profile = UserProfile.objects.get(user=request.user)
+    visit = get_object_or_404(Visit, id=visit_id, clinic=profile.clinic)
+
+    # Decode structured prescription rows if present.
+    items = []
+    raw_items = (visit.prescription_items or '').strip()
+    if raw_items:
+        try:
+            decoded = _json_specs.loads(raw_items)
+            if isinstance(decoded, list):
+                items = [r for r in decoded if isinstance(r, dict) and r.get('name')]
+        except Exception:
+            items = []
+
+    # Doctor display name + specialty text-form (clinic.specialty_type takes
+    # precedence over the internal enum so the doctor sees the wording the
+    # admin set on the account page).
+    clinic = visit.clinic
+    specialty_label = (clinic.specialty_type or '').strip() or clinic.get_specialty_display()
+    doctor_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+
+    return render(request, 'patients/print_prescription.html', {
+        'visit': visit,
+        'patient': visit.patient,
+        'clinic': clinic,
+        'items': items,
+        'free_text': (visit.prescription or '').strip(),
+        'specialty_label': specialty_label,
+        'doctor_name': doctor_name,
+    })
+
 
 # end of views.py

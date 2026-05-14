@@ -1,7 +1,7 @@
 {% extends 'patients/base.html' %}
 {% load patient_extras %}
 
-{% block title %}إكمال الزيارة{% endblock %}
+{% block title %}بدء المعاينة{% endblock %}
 
 {% block content %}
 
@@ -9,7 +9,7 @@
 
 <div class="patient-view-wrapper">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-        <h1 style="margin: 0; font-size: 28px; color: #1e293b; font-weight: 800;"><i class="fa-solid fa-stethoscope"></i> إكمال الزيارة: {{ visit.patient.name }}</h1>
+        <h1 style="margin: 0; font-size: 28px; color: #1e293b; font-weight: 800;"><i class="fa-solid fa-stethoscope"></i> بدء المعاينة: {{ visit.patient.name }}</h1>
     </div>
 
     <!-- Doctor Form -->
@@ -89,11 +89,41 @@
                    ────────────────────────────────────────────────────────────
                 {% endcomment %}
                 {% for f in medical_specs %}
-                    {% if f.name != 'follow_up_date' %}
+                    {% if f.name == 'follow_up_date' %}
+                        {# follow_up_date is rendered at the very bottom — skip here. #}
+                    {% elif f.name == 'prescription_items' %}
+                        {# Structured prescription rows (rendered specially). #}
+                        {% with field=form|form_field:'prescription_items' %}
+                            {% if field %}
+                            <div class="form-group full-width">
+                                <label>
+                                    <i class="fa-solid fa-prescription-bottle-medical"></i> وصفة الأدوية
+                                </label>
+                                <div id="rx-rows" class="rx-rows-wrap"></div>
+                                <button type="button" id="rx-add-row" class="btn-action btn-edit" style="margin-top:8px;">
+                                    <i class="fa-solid fa-plus"></i> إضافة دواء
+                                </button>
+                                {# Hidden field carrying the JSON payload. #}
+                                {{ field }}
+                            </div>
+                            {% endif %}
+                        {% endwith %}
+                    {% else %}
                         {% with field=form|form_field:f.name %}
                             {% if field %}
                             <div class="form-group full-width">
-                                <label>{{ field.label }}</label>
+                                <label>
+                                    {{ field.label }}
+                                    {% comment %} Per-field voice-to-text (Web Speech API). Hidden on browsers
+                                       without webkitSpeechRecognition (handled in JS init). {% endcomment %}
+                                    <button type="button"
+                                            class="voice-btn"
+                                            data-voice-target="{{ field.id_for_label }}"
+                                            title="إدخال صوتي"
+                                            aria-label="إدخال صوتي">
+                                        <i class="fa-solid fa-microphone"></i>
+                                    </button>
+                                </label>
                                 {% include 'patients/_quick_chips.html' with field_id=field.id_for_label chips=quick_picks|get_attr:f.name %}
                                 {{ field }}
                             </div>
@@ -127,13 +157,39 @@
             {% endif %}
             {% if visit.attachments.count < 2 %}
             <div class="form-group full-width" style="margin-bottom: 20px;">
-                <label for="{{ attachment_form.image.id_for_label }}">
-                    إضافة صورة / مرفق جديد
+                <label>
+                    إضافة صور / مرفقات جديدة
                     <span style="font-size:12px; color:#7a8a9a; font-weight:400;">
-                        (الحد الأقصى: مرفقان لكل زيارة — تم رفع {{ visit.attachments.count }}/2)
+                        (الحد الأقصى: مرفقان لكل زيارة — تم رفع {{ visit.attachments.count }}/2 — يمكن اختيار حتى ملفين دفعة واحدة)
                     </span>
                 </label>
-                {{ attachment_form.image }}
+                <div class="attachment-input-row">
+                    {% comment %} Two separate inputs so the user explicitly picks
+                       camera vs gallery on mobile, and so that ONE submit
+                       can carry up to two files. Each input allows
+                       `multiple` so a single gallery tap can attach both. {% endcomment %}
+                    <label class="attachment-upload-card" for="id_image_camera">
+                        <i class="fa-solid fa-camera"></i>
+                        <span>التقاط صورة بالكاميرا</span>
+                        <input type="file"
+                               name="image"
+                               id="id_image_camera"
+                               accept="image/*"
+                               capture="environment"
+                               style="display:none;">
+                    </label>
+                    <label class="attachment-upload-card" for="id_image_gallery">
+                        <i class="fa-solid fa-folder-open"></i>
+                        <span>اختيار من الملفات / المعرض (حتى ملفين)</span>
+                        <input type="file"
+                               name="image_gallery"
+                               id="id_image_gallery"
+                               accept="image/*"
+                               multiple
+                               style="display:none;">
+                    </label>
+                </div>
+                <div id="attachment-preview-list" class="attachment-preview-list"></div>
             </div>
             {% else %}
             <div class="empty-msg" style="margin-bottom: 20px; color:#a05a00;">
@@ -197,8 +253,26 @@
             </div>
 
 
-            <div class="form-actions">
-                <button type="submit" class="btn-submit"><i class="fa-solid fa-circle-check"></i> حفظ كزيارة مكتملة</button>
+            {% comment %} Hidden carrier — set by whichever save button is clicked
+               (default ''=save, 'print_rx'=save+print, 'consultation'=mark
+               as half-completed). Read by the view. {% endcomment %}
+            <input type="hidden" name="save_mode" id="id_save_mode" value="">
+
+            <div class="form-actions" style="flex-wrap: wrap; gap: 10px;">
+                <button type="submit" name="save" class="btn-submit"
+                        onclick="document.getElementById('id_save_mode').value=''">
+                    <i class="fa-solid fa-circle-check"></i> حفظ
+                </button>
+                <button type="submit" name="save_print" class="btn-submit"
+                        style="background: linear-gradient(135deg,#1a3a6b,#2a5bc4);"
+                        onclick="document.getElementById('id_save_mode').value='print_rx'">
+                    <i class="fa-solid fa-print"></i> حفظ وطباعة الوصفة
+                </button>
+                <button type="submit" name="save_consultation" class="btn-submit"
+                        style="background: linear-gradient(135deg,#b45309,#f59e0b);"
+                        onclick="document.getElementById('id_save_mode').value='consultation'">
+                    <i class="fa-solid fa-user-doctor"></i> حفظ كاستشارة
+                </button>
                 <a href="{% url 'doctor_pending_visits' %}" class="btn-cancel"><i class="fa-solid fa-xmark"></i> إلغاء</a>
             </div>
         </form>
@@ -303,6 +377,105 @@
     justify-content: center;
     flex-wrap: wrap;
 }
+
+/* ── Voice-to-text mic button ── */
+.voice-btn {
+    background: #f4f7fb;
+    border: 1px solid #c7d8f0;
+    color: #1a3a6b;
+    border-radius: 6px;
+    padding: 3px 8px;
+    margin-right: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.15s ease;
+    vertical-align: middle;
+}
+.voice-btn:hover { background: #e6eef9; }
+.voice-btn.listening {
+    background: #fde8e8;
+    border-color: #f5c2c2;
+    color: #b02a37;
+    animation: voice-pulse 1.2s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(176,42,55,0.35); }
+    50%      { box-shadow: 0 0 0 6px rgba(176,42,55,0); }
+}
+
+/* ── Structured prescription rows ── */
+.rx-rows-wrap {
+    display: flex; flex-direction: column; gap: 8px;
+    margin-top: 6px;
+}
+.rx-row {
+    display: grid;
+    grid-template-columns: 1.6fr 0.9fr 1fr 0.9fr 1.4fr auto;
+    gap: 6px;
+    background: #f8fbf9;
+    border: 1px solid #d0e4d5;
+    border-radius: 8px;
+    padding: 8px;
+}
+.rx-row input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #c7d8c8;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    background: white;
+}
+.rx-row .rx-remove {
+    background: #fbe8e8; color: #6b1a1a;
+    border: none; border-radius: 6px;
+    cursor: pointer; padding: 0 10px;
+    font-size: 14px;
+}
+.rx-row .rx-remove:hover { background: #f5d0d0; }
+@media (max-width: 720px) {
+    .rx-row { grid-template-columns: 1fr 1fr; }
+    .rx-row .rx-remove { grid-column: 1 / -1; padding: 6px; }
+}
+
+/* ── Attachment upload cards ── */
+.attachment-input-row {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    margin-top: 6px;
+}
+.attachment-upload-card {
+    flex: 1 1 220px;
+    background: #f8fbf9;
+    border: 1.5px dashed #c5deca;
+    border-radius: 10px;
+    padding: 16px 14px;
+    text-align: center;
+    cursor: pointer;
+    color: #1a3d28;
+    font-weight: 600;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.attachment-upload-card:hover {
+    background: #eef6f0;
+    border-color: #1a6b3c;
+}
+.attachment-upload-card i { font-size: 24px; color: #1a6b3c; }
+.attachment-preview-list {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    margin-top: 10px;
+}
+.attachment-preview-list .preview-item {
+    width: 90px; height: 90px;
+    border: 1px solid #c5deca; border-radius: 8px;
+    overflow: hidden; background: #f8fbf9;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #5a8a6a; text-align: center;
+    padding: 4px;
+}
+.attachment-preview-list .preview-item img {
+    width: 100%; height: 100%; object-fit: cover;
+}
 </style>
 
 <script>
@@ -390,6 +563,172 @@
                 }
             });
         }
+
+        // ── Voice-to-text (Web Speech API) ────────────────────────────
+        // Per-field microphone button. Uses the browser's built-in speech
+        // recognition (no backend, no API cost). Arabic locale by default.
+        // Falls back to hiding the button if the browser doesn't support it.
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRec) {
+            document.querySelectorAll('.voice-btn').forEach(b => b.style.display = 'none');
+        } else {
+            let currentRec = null;
+            let currentBtn = null;
+            document.querySelectorAll('.voice-btn').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const targetId = btn.dataset.voiceTarget;
+                    const target = document.getElementById(targetId);
+                    if (!target) return;
+
+                    // If a recognition is already running, stop it (toggle).
+                    if (currentRec && currentBtn === btn) {
+                        try { currentRec.stop(); } catch (_) {}
+                        return;
+                    }
+                    if (currentRec) {
+                        try { currentRec.stop(); } catch (_) {}
+                    }
+
+                    const rec = new SpeechRec();
+                    rec.lang = 'ar-SA';
+                    rec.continuous = false;
+                    rec.interimResults = false;
+                    rec.maxAlternatives = 1;
+
+                    currentRec = rec;
+                    currentBtn = btn;
+                    btn.classList.add('listening');
+
+                    rec.onresult = function (ev) {
+                        const text = ev.results[0][0].transcript || '';
+                        if (!text) return;
+                        // Append to existing content (with a leading space if non-empty).
+                        const existing = (target.value || '').trim();
+                        target.value = existing ? (existing + ' ' + text) : text;
+                        // Trigger input event so any listeners (autosize textarea, etc.)
+                        // pick up the change.
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                    };
+                    rec.onerror = function () {
+                        btn.classList.remove('listening');
+                        currentRec = null; currentBtn = null;
+                    };
+                    rec.onend = function () {
+                        btn.classList.remove('listening');
+                        currentRec = null; currentBtn = null;
+                    };
+                    try {
+                        rec.start();
+                    } catch (err) {
+                        btn.classList.remove('listening');
+                        currentRec = null; currentBtn = null;
+                    }
+                });
+            });
+        }
+
+        // ── Structured prescription rows ──────────────────────────────
+        // Hidden field carrying the JSON payload. Reads on page load for
+        // edit mode, serializes back on every change and on submit.
+        const rxField = document.querySelector('[data-prescription-items]');
+        const rxWrap  = document.getElementById('rx-rows');
+        const rxAddBtn = document.getElementById('rx-add-row');
+        if (rxField && rxWrap) {
+            function makeRowEl(item) {
+                item = item || {};
+                const wrap = document.createElement('div');
+                wrap.className = 'rx-row';
+                wrap.innerHTML = ''
+                  + '<input type="text" data-rx-key="name" placeholder="اسم الدواء" value="' + escapeHtml(item.name || '') + '">'
+                  + '<input type="text" data-rx-key="dose" placeholder="الجرعة (مثال: 500mg)" value="' + escapeHtml(item.dose || '') + '">'
+                  + '<input type="text" data-rx-key="frequency" placeholder="التكرار (مثال: 3 مرات يوم)" value="' + escapeHtml(item.frequency || '') + '">'
+                  + '<input type="text" data-rx-key="duration" placeholder="المدة (مثال: 5 أيام)" value="' + escapeHtml(item.duration || '') + '">'
+                  + '<input type="text" data-rx-key="notes" placeholder="ملاحظات" value="' + escapeHtml(item.notes || '') + '">'
+                  + '<button type="button" class="rx-remove" title="حذف"><i class="fa-solid fa-xmark"></i></button>';
+                wrap.querySelector('.rx-remove').addEventListener('click', function () {
+                    wrap.remove();
+                    serialize();
+                });
+                wrap.querySelectorAll('input').forEach(inp => {
+                    inp.addEventListener('input', serialize);
+                });
+                return wrap;
+            }
+            function escapeHtml(s) {
+                return String(s).replace(/[&<>"']/g, function (c) {
+                    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+                });
+            }
+            function serialize() {
+                const rows = [];
+                rxWrap.querySelectorAll('.rx-row').forEach(r => {
+                    const item = {};
+                    r.querySelectorAll('input[data-rx-key]').forEach(i => {
+                        item[i.dataset.rxKey] = i.value.trim();
+                    });
+                    if (item.name) rows.push(item);
+                });
+                rxField.value = JSON.stringify(rows);
+            }
+            // Initial load — parse existing JSON or start blank
+            let initial = [];
+            try {
+                if (rxField.value && rxField.value.trim()) {
+                    const parsed = JSON.parse(rxField.value);
+                    if (Array.isArray(parsed)) initial = parsed;
+                }
+            } catch (_) { initial = []; }
+            if (initial.length === 0) {
+                // Start with one empty row so the doctor sees the structure immediately.
+                rxWrap.appendChild(makeRowEl({}));
+            } else {
+                initial.forEach(item => rxWrap.appendChild(makeRowEl(item)));
+            }
+            rxAddBtn.addEventListener('click', function () {
+                rxWrap.appendChild(makeRowEl({}));
+                serialize();
+            });
+            // Re-serialize once on form submit so the hidden field is fresh.
+            const parentForm = rxField.closest('form');
+            if (parentForm) parentForm.addEventListener('submit', serialize);
+        }
+
+        // ── Attachment preview (camera + gallery inputs) ──────────────
+        const previewList = document.getElementById('attachment-preview-list');
+        function refreshAttachmentPreviews() {
+            if (!previewList) return;
+            previewList.innerHTML = '';
+            const cam = document.getElementById('id_image_camera');
+            const gal = document.getElementById('id_image_gallery');
+            let count = 0;
+            function addFile(f) {
+                count++;
+                const item = document.createElement('div');
+                item.className = 'preview-item';
+                if (f.type && f.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(f);
+                    item.appendChild(img);
+                } else {
+                    item.textContent = f.name;
+                }
+                previewList.appendChild(item);
+            }
+            if (cam && cam.files) Array.from(cam.files).forEach(addFile);
+            if (gal && gal.files) Array.from(gal.files).forEach(addFile);
+            if (count > 2) {
+                const warn = document.createElement('div');
+                warn.style.cssText = 'color:#b45309; font-size:12px; margin-top:6px; width:100%;';
+                warn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> سيتم رفع أول مرفقين فقط (الحد الأقصى 2).';
+                previewList.appendChild(warn);
+            }
+        }
+        ['id_image_camera', 'id_image_gallery'].forEach(function (id) {
+            const inp = document.getElementById(id);
+            if (inp) inp.addEventListener('change', refreshAttachmentPreviews);
+        });
 
         // ── Attachment delete buttons ─────────────────────────────────
         // Each thumbnail has an "x" button. We can't use a nested <form>

@@ -4,6 +4,34 @@
 
 {% block content %}
 
+<style>
+/* Highlight emergency visits so staff spot them at a glance.
+   Red border + soft pulsing glow + small "إسعاف" badge. */
+.pending-card-modern.emergency-card {
+    border: 2px solid #dc2626 !important;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+    animation: emergency-pulse 1.6s ease-in-out infinite;
+    position: relative;
+}
+.pending-card-modern.emergency-card::before {
+    content: "🚨 إسعاف";
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: #dc2626;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.35);
+}
+@keyframes emergency-pulse {
+    0%   { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0.55); }
+    70%  { box-shadow: 0 0 0 12px rgba(220, 38, 38, 0); }
+    100% { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0); }
+}
+</style>
 
 <div class="pending-list-header">
     <h1 class="pending-list-title">الزيارات المعلقة</h1>
@@ -25,7 +53,7 @@
 {% if visits %}
     <div class="pending-grid">
         {% for visit in visits %}
-            <div class="pending-card-modern {% if forloop.first %}first-in-line{% endif %}">
+            <div class="pending-card-modern {% if forloop.first %}first-in-line{% endif %} {% if visit.visit_type == 'emergency' %}emergency-card{% endif %}">
 
                 <div class="queue-number-badge">
                     {% if forloop.first %}الحالة التالية (رقم {{ forloop.counter }}){% else %}الحالة رقم: {{ forloop.counter }}{% endif %}
@@ -62,7 +90,7 @@
                 </div>
 
                 <div class="card-actions">
-                    <a href="{% url 'doctor_complete_visit' visit.id %}" class="btn-action-primary">إكمال الزيارة</a>
+                    <a href="{% url 'doctor_complete_visit' visit.id %}" class="btn-action-primary">بدء المعاينة</a>
                     <a href="{% url 'patient_detail' visit.patient.id %}" class="btn-action-outline">ملف المريض</a>
                 </div>
 

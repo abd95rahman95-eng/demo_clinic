@@ -192,9 +192,9 @@
                 <div class="form-group">
                     <label>المستهدف</label>
 
-                    {# Hidden field that actually gets posted. Filled by the
+                    {% comment %} Hidden field that actually gets posted. Filled by the
                        typeahead JS when the admin picks a clinic, or left
-                       empty for a broadcast. #}
+                       empty for a broadcast. {% endcomment %}
                     <input type="hidden" name="target_clinic_id" id="targetClinicIdInput" value="">
 
                     <div class="clinic-typeahead-wrap">

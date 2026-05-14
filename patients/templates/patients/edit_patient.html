@@ -30,18 +30,35 @@
                 </div>
 
                 <div class="form-group">
-                    <label>{{ form.age.label }}</label>
-                    {{ form.age }}
-                </div>
-
-                <div class="form-group">
                     <label>{{ form.phone.label }}</label>
                     {{ form.phone }}
+                    <small style="color:#5a8a6a; font-size:12px;">يجب أن يحتوي على 10 أرقام بالضبط.</small>
                 </div>
 
                 <div class="form-group">
                     <label>{{ form.gender.label }}</label>
                     {{ form.gender }}
+                </div>
+
+                <div class="form-group full-width">
+                    <label><i class="fa-solid fa-cake-candles"></i> تاريخ الميلاد <small style="color:#7a8a9a; font-weight:400;">(يحدّث العمر تلقائياً)</small></label>
+                    <div style="display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap:8px;">
+                        <div>
+                            <small style="color:#5a8a6a;">السنة</small>
+                            {{ form.birth_year }}
+                        </div>
+                        <div>
+                            <small style="color:#5a8a6a;">الشهر (اختياري)</small>
+                            {{ form.birth_month }}
+                        </div>
+                        <div>
+                            <small style="color:#5a8a6a;">اليوم (اختياري)</small>
+                            {{ form.birth_day }}
+                        </div>
+                    </div>
+                    {% if patient.age_years %}
+                    <small style="color:#5a8a6a;">العمر الحالي: <strong>{{ patient.age_years }}</strong> سنة.</small>
+                    {% endif %}
                 </div>
 
                 <div class="form-group full-width">

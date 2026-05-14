@@ -214,11 +214,34 @@ class Patient(models.Model):
 
     clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
-    age = models.IntegerField()
+    # `age` is kept on the model for backward-compat with old data and existing
+    # display loops. New records compute age from `birth_date` (see `.age_years`
+    # property). The field is nullable so a freshly added patient that only has
+    # a birth_date doesn't need a redundant int stored.
+    age = models.IntegerField(null=True, blank=True)
+    # Source of truth for age going forward. If the clinic doesn't know the
+    # exact month/day, the form defaults them to 1/1 (January 1st of the
+    # provided birth year).
+    birth_date = models.DateField(null=True, blank=True, verbose_name='تاريخ الميلاد')
     phone = models.CharField(max_length=20)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
     address = models.CharField(max_length=255, blank=True)
     file_number = models.CharField(max_length=50)
+
+    @property
+    def age_years(self):
+        """Computed age in whole years. Prefers birth_date (auto-updates each
+        year) and falls back to the legacy `age` int for patients added
+        before the birth_date column existed."""
+        from datetime import date as _date
+        if self.birth_date:
+            today = _date.today()
+            years = today.year - self.birth_date.year
+            # Subtract 1 if we haven't reached the birthday yet this year.
+            if (today.month, today.day) < (self.birth_date.month, self.birth_date.day):
+                years -= 1
+            return max(0, years)
+        return self.age
 
     def save(self, *args, **kwargs):
         if not self.file_number:
@@ -256,6 +279,12 @@ class Visit(models.Model):
     STATUS_CHOICES = [
         ('nurse_draft', 'مسودة تمريض'),
         ('doctor_completed', 'مكتملة من الطبيب'),
+        # New "half-completed" status used by the doctor's
+        # "حفظ كاستشارة" save mode. Visit is saved but flagged
+        # as needing referral (specialist, lab, imaging) — shown
+        # to staff as in-progress and listed under "زيارات الاستشارة"
+        # on the dashboard.
+        ('consultation_pending', 'استشارة قيد الانتظار'),
     ]
 
     patient = models.ForeignKey('Patient', on_delete=models.CASCADE, related_name='visits')
@@ -287,6 +316,13 @@ class Visit(models.Model):
     diagnosis = models.TextField(blank=True)
     treatment_plan = models.TextField(blank=True)
     prescription = models.TextField(blank=True)
+    # Structured prescription. Stored as JSON-encoded list of rows:
+    # [{"name": "...", "dose": "...", "frequency": "...", "duration": "...", "notes": "..."}, ...]
+    # The free-text `prescription` field above is kept for backward-compat
+    # and to capture anything the doctor wants outside the structured rows.
+    # The A5 print template renders from `prescription_items` first and falls
+    # back to `prescription` if no structured rows exist.
+    prescription_items = models.TextField(blank=True, default='', verbose_name='وصفة الأدوية (جدولية)')
     lab_requests = models.TextField(blank=True)
     imaging_requests = models.TextField(blank=True)
     patient_instructions = models.TextField(blank=True)
@@ -589,3 +625,46 @@ class SignupRequest(models.Model):
 
     def __str__(self):
         return f"{self.clinic_name} - {self.doctor_name}"
+
+
+# -----------------------------------------------------------------------------
+# Appointment — independent booking model (NOT tied to Visit.follow_up_date).
+#
+# Used by the "احجز موعد" button on the patient page and by the new dashboard
+# Calendar card. A booked appointment doesn't need an associated Visit row —
+# the clinic creates a Visit (and the nurse_draft → doctor_completed flow)
+# only when the patient actually walks in.
+# -----------------------------------------------------------------------------
+class Appointment(models.Model):
+    APPT_TYPE_CHOICES = [
+        ('follow_up',    'مراجعة'),
+        ('first_visit',  'زيارة أولى'),
+        ('consultation', 'استشارة'),
+        ('procedure',    'إجراء / معالجة'),
+        ('other',        'أخرى'),
+    ]
+    STATUS_CHOICES = [
+        ('scheduled', 'مجدول'),
+        ('done',      'تم'),
+        ('cancelled', 'ملغى'),
+    ]
+
+    clinic       = models.ForeignKey('Clinic', on_delete=models.CASCADE, related_name='appointments')
+    patient      = models.ForeignKey('Patient', on_delete=models.CASCADE, related_name='appointments')
+    scheduled_at = models.DateTimeField(verbose_name='موعد الزيارة')
+    appt_type    = models.CharField(max_length=20, choices=APPT_TYPE_CHOICES, default='follow_up', verbose_name='نوع الموعد')
+    notes        = models.TextField(blank=True, default='', verbose_name='ملاحظات')
+    status       = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
+    created_by   = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='booked_appointments')
+    created_at   = models.DateTimeField(auto_now_add=True)
+    updated_at   = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('scheduled_at',)
+        indexes = [
+            models.Index(fields=['clinic', 'scheduled_at']),
+            models.Index(fields=['patient']),
+        ]
+
+    def __str__(self):
+        return f"موعد {self.patient.name} - {self.scheduled_at:%Y-%m-%d %H:%M}"

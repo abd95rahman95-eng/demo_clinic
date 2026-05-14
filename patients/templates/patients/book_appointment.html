@@ -1,0 +1,51 @@
+{% extends 'patients/base.html' %}
+
+{% block title %}حجز موعد{% endblock %}
+
+{% block content %}
+
+<div class="patient-view-wrapper">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+        <h1 style="margin:0; font-size:26px; color:#1e293b; font-weight:800;">
+            <i class="fa-solid fa-calendar-plus"></i> حجز موعد للمريض: {{ patient.name }}
+        </h1>
+        <a href="{% url 'patient_detail' patient.id %}" class="btn-cancel"><i class="fa-solid fa-arrow-right"></i> رجوع لملف المريض</a>
+    </div>
+
+    <div class="ui-form-card">
+        <form method="post">
+            {% csrf_token %}
+
+            {% if form.errors %}
+            <div class="error-card">
+                <h3><i class="fa-solid fa-triangle-exclamation"></i> يوجد خطأ في البيانات</h3>
+                {{ form.errors }}
+            </div>
+            {% endif %}
+
+            <div class="section-title"><i class="fa-solid fa-clock"></i> تفاصيل الموعد</div>
+
+            <div class="form-grid-layout">
+                <div class="form-group">
+                    <label>{{ form.scheduled_at.label }}</label>
+                    {{ form.scheduled_at }}
+                </div>
+                <div class="form-group">
+                    <label>{{ form.appt_type.label }}</label>
+                    {{ form.appt_type }}
+                </div>
+                <div class="form-group full-width">
+                    <label>{{ form.notes.label }}</label>
+                    {{ form.notes }}
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-submit"><i class="fa-solid fa-circle-check"></i> حجز الموعد</button>
+                <a href="{% url 'patient_detail' patient.id %}" class="btn-cancel"><i class="fa-solid fa-xmark"></i> إلغاء</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

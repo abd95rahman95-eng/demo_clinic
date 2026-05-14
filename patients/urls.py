@@ -26,6 +26,19 @@ urlpatterns = [
     path('nurse-edit-visit/<int:id>/', views.nurse_edit_visit, name='nurse_edit_visit'),
     path('clear-appointment/<int:visit_id>/', views.clear_appointment, name='clear_appointment'),
 
+    # Unified today's-bookings handlers — kind = 'visit' | 'appointment'
+    path('bookings/<str:kind>/<int:item_id>/clear/', views.clear_booking, name='clear_booking'),
+    path('bookings/<str:kind>/<int:item_id>/enter/', views.enter_booking, name='enter_booking'),
+
+    # Appointment booking + weekly calendar
+    path('appointments/book/', views.book_appointment_picker, name='book_appointment_picker'),
+    path('appointments/book/<int:patient_id>/', views.book_appointment, name='book_appointment'),
+    path('appointments/<int:appointment_id>/cancel/', views.cancel_appointment, name='cancel_appointment'),
+    path('calendar/', views.calendar_view, name='calendar'),
+
+    # A5 prescription print page
+    path('visits/<int:visit_id>/print-prescription/', views.print_prescription, name='print_prescription'),
+
     # Delete a single visit attachment (POST-only). Available to doctors
     # and nurses inside the same clinic. The view decides where to send
     # the user back based on the visit status + role; an explicit `?next=`
@@ -49,6 +62,7 @@ urlpatterns = [
 
     # AI medical assistance (Claude). Specialty-aware prompts; dentistry disabled.
     path('api/visits/<int:visit_id>/ai-assist/', views.ai_medical_assistance, name='ai_medical_assistance'),
+
 
     path('', views.patient_list, name='patient_list'),
     path('<int:id>/', views.patient_detail, name='patient_detail'),

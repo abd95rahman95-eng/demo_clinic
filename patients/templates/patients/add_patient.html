@@ -30,18 +30,34 @@
                 </div>
 
                 <div class="form-group">
-                    <label>{{ form.age.label }}</label>
-                    {{ form.age }}
-                </div>
-
-                <div class="form-group">
                     <label>{{ form.phone.label }}</label>
                     {{ form.phone }}
+                    <small style="color:#5a8a6a; font-size:12px;">يجب أن يحتوي على 10 أرقام بالضبط.</small>
                 </div>
 
                 <div class="form-group">
                     <label>{{ form.gender.label }}</label>
                     {{ form.gender }}
+                </div>
+
+                {% comment %} Birth date — three small inputs side-by-side. Year is the only
+                   required-ish part; month/day default to 1/1 if blank. {% endcomment %}
+                <div class="form-group full-width">
+                    <label><i class="fa-solid fa-cake-candles"></i> تاريخ الميلاد</label>
+                    <div style="display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap:8px;">
+                        <div>
+                            <small style="color:#5a8a6a;">السنة</small>
+                            {{ form.birth_year }}
+                        </div>
+                        <div>
+                            <small style="color:#5a8a6a;">الشهر (اختياري)</small>
+                            {{ form.birth_month }}
+                        </div>
+                        <div>
+                            <small style="color:#5a8a6a;">اليوم (اختياري)</small>
+                            {{ form.birth_day }}
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group full-width">

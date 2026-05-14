@@ -575,7 +575,8 @@ FIELD_LABELS = {
     'diagnosis':                  'التشخيص',
     'treatment_plan':             'الخطة العلاجية',
     'patient_instructions':       'تعليمات للمريض',
-    'prescription':               'الوصفة الطبية',
+    'prescription':               'ملاحظات الوصفة',
+    'prescription_items':         'وصفة الأدوية',
     'follow_up_date':             'موعد المراجعة القادم',
 
     # Cardiology
@@ -648,11 +649,14 @@ SPECIALTY_MEDICAL_FIELDS = {
 
 # Common medical fields shown for ALL specialties, in display order.
 # Rendered AFTER specialty-specific medical fields.
+# `prescription_items` is the structured medicine table (rendered specially
+# in the template) and `prescription` is the free-text notes box below it.
 COMMON_MEDICAL_FIELDS = [
     'doctor_notes',
     'diagnosis',
     'treatment_plan',
     'patient_instructions',
+    'prescription_items',
     'prescription',
     'follow_up_date',
 ]

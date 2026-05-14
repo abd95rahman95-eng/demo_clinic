@@ -19,39 +19,97 @@
 </div>
 
 
-<!-- ── Top action cards ── -->
+<!-- ── Top action cards (six cards in a 2/3-column responsive grid) ── -->
+<style>
+/* Six-card dashboard grid. We use the existing .action-card / .action-card-link
+   styling for visuals; this just adds responsive column counts and a smaller
+   variant of the card so six fit without dwarfing each other. */
+.top-action-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 22px;
+}
+@media (max-width: 900px) {
+    .top-action-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 520px) {
+    .top-action-grid { grid-template-columns: 1fr; }
+}
+.action-card-mini {
+    padding: 18px 18px;
+    min-height: 110px;
+}
+.badge-count {
+    background: #fbbf24; color: #78350f;
+    padding: 2px 9px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; margin-right: 6px;
+}
+.badge-count.danger { background: #fee2e2; color: #b91c1c; }
+</style>
+
 <div class="top-action-grid">
 
+    {# Row 1 (visual right→left in RTL): Add patient | Pending visits | Book appt #}
+    {# 1. Add patient #}
+    <a href="{% url 'add_patient' %}" class="action-card-link">
+        <div class="action-card action-card-mini action-patients">
+            <div class="action-card-title"><i class="fa-solid fa-user-plus"></i> إضافة مريض</div>
+            <div class="action-card-subtitle">تسجيل مريض جديد</div>
+        </div>
+    </a>
+
+    {# 2. Pending visits / waiting list #}
+    {% if is_doctor %}
+        <a href="{% url 'doctor_pending_visits' %}" class="action-card-link">
+            <div class="action-card action-card-mini action-pending">
+                <div class="action-card-title"><i class="fa-solid fa-hourglass-half"></i> الزيارات المعلقة {% if pending_visits_count %}<span class="badge-count">{{ pending_visits_count }}</span>{% endif %}</div>
+                <div class="action-card-subtitle">بانتظار المعاينة</div>
+            </div>
+        </a>
+    {% else %}
+        <a href="{% url 'waiting_list' %}" class="action-card-link">
+            <div class="action-card action-card-mini action-pending">
+                <div class="action-card-title"><i class="fa-solid fa-people-arrows"></i> قائمة الانتظار {% if pending_visits_count %}<span class="badge-count">{{ pending_visits_count }}</span>{% endif %}</div>
+                <div class="action-card-subtitle">المرضى المنتظرون حالياً</div>
+            </div>
+        </a>
+    {% endif %}
+
+    {# 3. Book appointment — dedicated picker page (shares violet palette with the Calendar card). #}
+    <a href="{% url 'book_appointment_picker' %}" class="action-card-link">
+        <div class="action-card action-card-mini" style="background: linear-gradient(135deg, #ede9fe, #ddd6fe); color:#4338ca;">
+            <div class="action-card-title"><i class="fa-solid fa-calendar-plus"></i> حجز موعد</div>
+            <div class="action-card-subtitle">اختر مريض لحجز موعد له</div>
+        </div>
+    </a>
+
+    {# Row 2 (visual right→left in RTL): Patients list | Consultations | Calendar #}
+    {# 4. Patients list #}
     <a href="{% url 'patient_list' %}" class="action-card-link">
-        <div class="action-card action-patients">
+        <div class="action-card action-card-mini action-patients">
             <div class="action-card-title"><i class="fa-solid fa-users"></i> المرضى</div>
             <div class="action-card-subtitle">عرض وإدارة قائمة المرضى</div>
         </div>
     </a>
 
-    {% if is_doctor %}
-        <a href="{% url 'doctor_pending_visits' %}" class="action-card-link">
-            <div class="action-card action-pending">
-                <div class="action-card-title"><i class="fa-solid fa-hourglass-half"></i> الزيارات المعلقة</div>
-                <div class="action-card-subtitle">بانتظار الإكمال</div>
-            </div>
-        </a>
-    {% elif is_nurse %}
-        <a href="{% url 'waiting_list' %}" class="action-card-link">
-            <div class="action-card action-pending">
-                <div class="action-card-title"><i class="fa-solid fa-people-arrows"></i> قائمة الانتظار</div>
-                <div class="action-card-subtitle">المرضى المنتظرون حاليًا</div>
-            </div>
-        </a>
-    {% endif %}
+    {# 5. Consultation visits — half-completed, awaiting referral #}
+    <a href="{% url 'patient_list' %}?filter=consultation" class="action-card-link">
+        <div class="action-card action-card-mini" style="background: linear-gradient(135deg, #fef3c7, #fde68a); color:#7c2d12;">
+            <div class="action-card-title"><i class="fa-solid fa-user-doctor"></i> زيارات الاستشارة {% if consultation_visits_count %}<span class="badge-count">{{ consultation_visits_count }}</span>{% endif %}</div>
+            <div class="action-card-subtitle">قيد الانتظار (مختصّ / فحوصات)</div>
+        </div>
+    </a>
 
-    <div class="action-card action-reports action-card-disabled">
-        <div class="action-card-title"><i class="fa-solid fa-chart-column"></i> التقارير</div>
-        <div class="action-card-subtitle">قريبًا</div>
-    </div>
+    {# 6. Calendar — shares the violet palette with "حجز موعد" above. #}
+    <a href="{% url 'calendar' %}" class="action-card-link">
+        <div class="action-card action-card-mini" style="background: linear-gradient(135deg, #ede9fe, #ddd6fe); color:#4338ca;">
+            <div class="action-card-title"><i class="fa-solid fa-calendar-week"></i> التقويم {% if upcoming_appointments_count %}<span class="badge-count">{{ upcoming_appointments_count }}</span>{% endif %}</div>
+            <div class="action-card-subtitle">المواعيد الأسبوعية</div>
+        </div>
+    </a>
 
 </div>
-
 
 <!-- ── Today's bookings ── -->
 <div class="dashboard-list-card" style="margin-bottom: 20px;">
@@ -63,14 +121,21 @@
                 <div style="flex:1; min-width:0;">
                     <a href="{% url 'patient_detail' booking.patient.id %}">{{ booking.patient.name }}</a>
                     <div class="dashboard-item-sub" style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
-                        <span style="background:#1a6b3c; color:white; padding:3px 10px; border-radius:6px; font-weight:700; font-size:13px;"><i class="fa-solid fa-clock"></i> {{ booking.follow_up_date|date:"H:i" }}</span>
+                        <span style="background:#1a6b3c; color:white; padding:3px 10px; border-radius:6px; font-weight:700; font-size:13px;"><i class="fa-solid fa-clock"></i> {{ booking.time|date:"H:i" }}</span>
+                        <span style="background:#eef2ff; color:#3730a3; padding:2px 8px; border-radius:6px; font-size:12px; font-weight:700;">{{ booking.kind_label }}</span>
                         <span><i class="fa-solid fa-phone"></i> {{ booking.patient.phone }}</span>
                     </div>
                 </div>
-                <form method="post" action="{% url 'clear_appointment' booking.id %}" style="margin:0;" onsubmit="return confirm('تم إنجاز الموعد وإزالته من قائمة اليوم؟');">
-                    {% csrf_token %}
-                    <button type="submit" title="وضع كمنجز" style="background:#1a6b3c; color:white; border:none; padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:600; font-size:13px;"><i class="fa-solid fa-check"></i> تم</button>
-                </form>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+                    <form method="post" action="{% url 'enter_booking' booking.kind booking.id %}" style="margin:0;" onsubmit="return confirm('بدء استقبال المريض وإزالة الموعد من قائمة اليوم؟');">
+                        {% csrf_token %}
+                        <button type="submit" title="ادخال المريض (بدء زيارة تمريضية)" style="background:#1a3a6b; color:white; border:none; padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:600; font-size:13px;"><i class="fa-solid fa-door-open"></i> ادخال</button>
+                    </form>
+                    <form method="post" action="{% url 'clear_booking' booking.kind booking.id %}" style="margin:0;" onsubmit="return confirm('تأكيد: لم يحضر المريض، وإزالة الموعد من قائمة اليوم؟');">
+                        {% csrf_token %}
+                        <button type="submit" title="المريض لم يحضر — إزالة من القائمة" style="background:#b91c1c; color:white; border:none; padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:600; font-size:13px;"><i class="fa-solid fa-user-slash"></i> لم يحضر</button>
+                    </form>
+                </div>
             </li>
             {% endfor %}
         </ul>
@@ -172,7 +237,7 @@
                     </a>
                     {% if is_doctor %}
                     <a href="{% url 'doctor_complete_visit' next_patient_visit.id %}" class="btn btn-primary-green">
-                        <i class="fa-solid fa-stethoscope"></i> إكمال الزيارة
+                        <i class="fa-solid fa-stethoscope"></i> بدء المعاينة
                     </a>
                     {% endif %}
                 </div>

@@ -1,0 +1,201 @@
+{% extends 'patients/base.html' %}
+
+{% block title %}حجز موعد — اختر المريض{% endblock %}
+
+{% block content %}
+<style>
+.pick-header {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.pick-header h1 {
+    margin: 0; font-size: 24px; color: #1e293b; font-weight: 800;
+}
+.pick-filter-row {
+    display: flex; gap: 10px; align-items: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+}
+.pick-filter-row input {
+    flex: 1;
+    border: none; background: transparent;
+    outline: none;
+    font-family: inherit; font-size: 15px;
+    padding: 6px 4px;
+}
+.pick-filter-row i { color: #64748b; }
+.pick-filter-count {
+    font-size: 12px; color: #64748b; white-space: nowrap;
+}
+
+.pick-list {
+    display: flex; flex-direction: column;
+    gap: 8px;
+    margin-bottom: 30px;
+}
+.pick-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px 16px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+    gap: 12px;
+}
+.pick-row:hover {
+    background: #f5f3ff;
+    border-color: #c4b5fd;
+    transform: translateY(-1px);
+}
+.pick-row-main {
+    flex: 1; min-width: 0;
+}
+.pick-row-name {
+    font-weight: 700; color: #1e293b;
+    font-size: 16px;
+    margin-bottom: 4px;
+    /* Truncate very long names instead of wrapping the row. */
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pick-row-meta {
+    font-size: 12px; color: #64748b;
+    display: flex; gap: 12px; flex-wrap: wrap;
+}
+.pick-row-meta b { color: #475569; font-weight: 600; }
+.pick-cta {
+    background: #ddd6fe;
+    color: #3730a3;
+    border: 1px solid #c4b5fd;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-weight: 700; font-size: 13px;
+    white-space: nowrap;
+}
+.pick-empty {
+    background: #fff7ed;
+    border: 1px dashed #fdba74;
+    color: #9a3412;
+    border-radius: 10px;
+    padding: 24px; text-align: center;
+    font-size: 14px;
+}
+</style>
+
+<div class="patient-view-wrapper">
+
+    <div class="pick-header">
+        <h1><i class="fa-solid fa-calendar-plus"></i> حجز موعد — اختر المريض</h1>
+        <a href="{% url 'dashboard' %}" class="btn-cancel" style="text-decoration:none;"><i class="fa-solid fa-arrow-right"></i> رجوع</a>
+    </div>
+
+    <div class="pick-filter-row">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="search"
+               id="pickerFilter"
+               autocomplete="off"
+               placeholder="ابحث بالاسم أو الهاتف أو رقم الملف..."
+               aria-label="فلترة قائمة المرضى">
+        <span class="pick-filter-count" id="pickerCount">{{ patients|length }} مريض</span>
+    </div>
+
+    {% if patients %}
+    <div class="pick-list" id="pickerList">
+        {% for p in patients %}
+        <a href="{% url 'book_appointment' p.id %}"
+           class="pick-row"
+           data-name="{{ p.name|default_if_none:'' }}"
+           data-phone="{{ p.phone|default_if_none:'' }}"
+           data-file="{{ p.file_number|default_if_none:'' }}">
+            <div class="pick-row-main">
+                <div class="pick-row-name">{{ p.name }}</div>
+                <div class="pick-row-meta">
+                    <span><b>رقم الملف:</b> {{ p.file_number|default:"—" }}</span>
+                    <span><b>الهاتف:</b> {{ p.phone|default:"—" }}</span>
+                </div>
+            </div>
+            <span class="pick-cta"><i class="fa-solid fa-calendar-plus"></i> احجز</span>
+        </a>
+        {% endfor %}
+    </div>
+    <div class="pick-empty" id="pickerNoResults" style="display:none;">
+        لا يوجد مريض يطابق البحث.
+    </div>
+    {% else %}
+    <div class="pick-empty">
+        لا يوجد مرضى مسجَّلون في العيادة بعد.
+        <div style="margin-top:10px;"><a href="{% url 'add_patient' %}" class="btn-action btn-add" style="text-decoration:none;"><i class="fa-solid fa-user-plus"></i> أضِف أول مريض</a></div>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+(function () {
+    // Arabic normalization — mirror of patients/views.py _normalize_arabic.
+    // Fold all alef variants (أ، إ، آ، ٱ) to plain ا, drop spaces and a few
+    // invisible RTL/joiner marks. Keeps the in-page filter consistent with
+    // the server-side search behavior.
+    const ALEF_MAP = {
+        'أ': 'ا', 'إ': 'ا', 'آ': 'ا', 'ٱ': 'ا',
+        ' ': '',
+        '‌': '', // zero-width non-joiner
+        '‏': '', // right-to-left mark
+        '‎': '', // left-to-right mark
+    };
+    function normalize(s) {
+        if (!s) return '';
+        return String(s).split('').map(ch => ALEF_MAP.hasOwnProperty(ch) ? ALEF_MAP[ch] : ch).join('').toLowerCase();
+    }
+
+    const input = document.getElementById('pickerFilter');
+    const list  = document.getElementById('pickerList');
+    const count = document.getElementById('pickerCount');
+    const empty = document.getElementById('pickerNoResults');
+    if (!input || !list) return;
+
+    // Cache normalized search-blobs per row so filtering is one pass.
+    const rows = Array.from(list.querySelectorAll('.pick-row')).map(el => ({
+        el: el,
+        blob: normalize((el.dataset.name || '') + ' ' + (el.dataset.phone || '') + ' ' + (el.dataset.file || '')),
+    }));
+
+    function applyFilter() {
+        const q = normalize(input.value.trim());
+        let shown = 0;
+        for (const r of rows) {
+            const match = !q || r.blob.indexOf(q) !== -1;
+            r.el.style.display = match ? '' : 'none';
+            if (match) shown++;
+        }
+        if (count) {
+            count.textContent = q ? (shown + ' من ' + rows.length) : (rows.length + ' مريض');
+        }
+        if (empty) {
+            empty.style.display = (shown === 0 && q) ? 'block' : 'none';
+        }
+    }
+
+    input.addEventListener('input', applyFilter);
+
+    // Focus the filter on page-load so the doctor can start typing immediately.
+    setTimeout(() => input.focus(), 50);
+
+    // Enter on the filter input → open the first visible patient's booking page.
+    input.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        const first = rows.find(r => r.el.style.display !== 'none');
+        if (first) {
+            e.preventDefault();
+            window.location.href = first.el.href;
+        }
+    });
+})();
+</script>
+
+{% endblock %}

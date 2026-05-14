@@ -1,0 +1,112 @@
+{% extends 'patients/base.html' %}
+{% load patient_extras %}
+
+{% block title %}التقويم الأسبوعي{% endblock %}
+
+{% block content %}
+
+<style>
+.cal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+.cal-nav {
+    display: flex; gap: 8px; align-items: center;
+}
+.cal-nav a, .cal-nav button {
+    background: #ddd6fe; color: #3730a3;
+    border: 1px solid #c4b5fd;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-weight: 700; font-size: 13px;
+    text-decoration: none; cursor: pointer;
+    font-family: inherit;
+}
+.cal-nav a:hover, .cal-nav button:hover { background: #c4b5fd; }
+.cal-nav .today-btn {
+    background: #1a6b3c; color: white; border-color: #1a6b3c;
+}
+.cal-nav .today-btn:hover { background: #145c32; }
+.week-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+}
+@media (max-width: 900px) {
+    .week-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 520px) {
+    .week-grid { grid-template-columns: 1fr; }
+}
+.day-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    min-height: 220px;
+}
+.day-card.today { border-color: #1a6b3c; box-shadow: 0 0 0 2px rgba(26,107,60,0.18); }
+.day-header {
+    padding: 10px 12px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 700; color: #1a3d28;
+}
+.day-card.today .day-header { background: #ecfdf5; color: #065f46; }
+.day-body { padding: 10px 12px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.appt-pill {
+    background: #eef2ff; border: 1px solid #c7d2fe;
+    border-radius: 6px; padding: 7px 10px;
+    font-size: 13px; color: #1e293b;
+    display: flex; justify-content: space-between; align-items: center; gap: 6px;
+}
+.appt-pill .appt-time { font-weight: 700; color: #3730a3; }
+.appt-pill .appt-patient { font-weight: 600; }
+/* Follow-up bookings (Visit.follow_up_date) — distinct from booked appts. */
+.appt-pill.appt-followup { background: #fff7ed; border-color: #fed7aa; }
+.appt-pill.appt-followup .appt-time { color: #9a3412; }
+.appt-empty { color: #94a3b8; font-style: italic; font-size: 13px; }
+</style>
+
+<div class="patient-view-wrapper">
+    <div class="cal-header">
+        <h1 style="margin:0; font-size:24px; color:#1e293b; font-weight:800;">
+            <i class="fa-solid fa-calendar-week"></i> التقويم الأسبوعي
+        </h1>
+        <div class="cal-nav">
+            <a href="?week={{ prev_week }}"><i class="fa-solid fa-chevron-right"></i> الأسبوع السابق</a>
+            <a class="today-btn" href="{% url 'calendar' %}">اليوم</a>
+            <a href="?week={{ next_week }}">الأسبوع التالي <i class="fa-solid fa-chevron-left"></i></a>
+        </div>
+    </div>
+
+    <div class="week-grid">
+        {% for day in days %}
+        <div class="day-card {% if day.is_today %}today{% endif %}">
+            <div class="day-header">{{ day.date|arabic_day }}، {{ day.date|date:"d-m" }}</div>
+            <div class="day-body">
+                {% for appt in day.appointments %}
+                <div class="appt-pill {% if appt.kind == 'follow_up' %}appt-followup{% endif %}">
+                    <div>
+                        <div class="appt-time">{{ appt.time|date:"H:i" }}</div>
+                        <a href="{% url 'patient_detail' appt.patient.id %}" class="appt-patient">{{ appt.patient.name }}</a>
+                        <div style="font-size:12px; color:#64748b;">{{ appt.type_label }}</div>
+                    </div>
+                    <form method="post" action="{{ appt.cancel_url }}" onsubmit="return confirm('{{ appt.cancel_confirm }}');" style="margin:0;">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" class="btn-action btn-delete" style="padding:4px 8px; font-size:11px;" title="إلغاء"><i class="fa-solid fa-xmark"></i></button>
+                    </form>
+                </div>
+                {% empty %}
+                <div class="appt-empty">— لا توجد مواعيد —</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}

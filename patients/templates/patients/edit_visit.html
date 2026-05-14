@@ -65,11 +65,37 @@
 
             <div class="form-grid-layout">
                 {% for f in medical_specs %}
-                    {% if f.name != 'follow_up_date' %}
+                    {% if f.name == 'follow_up_date' %}
+                        {# bottom — handled later #}
+                    {% elif f.name == 'prescription_items' %}
+                        {% with field=form|form_field:'prescription_items' %}
+                            {% if field %}
+                            <div class="form-group full-width">
+                                <label><i class="fa-solid fa-prescription-bottle-medical"></i> وصفة الأدوية</label>
+                                <div id="rx-rows" class="rx-rows-wrap"></div>
+                                <button type="button" id="rx-add-row" class="btn-action btn-edit" style="margin-top:8px;">
+                                    <i class="fa-solid fa-plus"></i> إضافة دواء
+                                </button>
+                                {{ field }}
+                            </div>
+                            {% endif %}
+                        {% endwith %}
+                    {% else %}
                         {% with field=form|form_field:f.name %}
                             {% if field %}
                             <div class="form-group full-width">
-                                <label>{{ field.label }}</label>
+                                <label>
+                                    {{ field.label }}
+                                    {% comment %} Per-field voice-to-text (Web Speech API). Hidden on browsers
+                                       without webkitSpeechRecognition (handled in JS init below). {% endcomment %}
+                                    <button type="button"
+                                            class="voice-btn"
+                                            data-voice-target="{{ field.id_for_label }}"
+                                            title="إدخال صوتي"
+                                            aria-label="إدخال صوتي">
+                                        <i class="fa-solid fa-microphone"></i>
+                                    </button>
+                                </label>
                                 {% include 'patients/_quick_chips.html' with field_id=field.id_for_label chips=quick_picks|get_attr:f.name %}
                                 {{ field }}
                             </div>
@@ -78,6 +104,103 @@
                     {% endif %}
                 {% endfor %}
             </div>
+
+<style>
+/* ── Voice-to-text mic button (matches doctor_complete_visit.html). ── */
+.voice-btn {
+    background: #f4f7fb;
+    border: 1px solid #c7d8f0;
+    color: #1a3a6b;
+    border-radius: 6px;
+    padding: 3px 8px;
+    margin-right: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.15s ease;
+    vertical-align: middle;
+}
+.voice-btn:hover { background: #e6eef9; }
+.voice-btn.listening {
+    background: #fde8e8;
+    border-color: #f5c2c2;
+    color: #b02a37;
+    animation: voice-pulse 1.2s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(176,42,55,0.35); }
+    50%      { box-shadow: 0 0 0 6px rgba(176,42,55,0); }
+}
+
+.rx-rows-wrap { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.rx-row {
+    display: grid;
+    grid-template-columns: 1.6fr 0.9fr 1fr 0.9fr 1.4fr auto;
+    gap: 6px;
+    background: #f8fbf9; border: 1px solid #d0e4d5; border-radius: 8px; padding: 8px;
+}
+.rx-row input {
+    width: 100%; padding: 6px 8px; border: 1px solid #c7d8c8;
+    border-radius: 6px; font-family: inherit; font-size: 13px; background: white;
+}
+.rx-row .rx-remove {
+    background: #fbe8e8; color: #6b1a1a; border: none; border-radius: 6px;
+    cursor: pointer; padding: 0 10px;
+}
+@media (max-width: 720px) {
+    .rx-row { grid-template-columns: 1fr 1fr; }
+    .rx-row .rx-remove { grid-column: 1 / -1; padding: 6px; }
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const rxField = document.querySelector('[data-prescription-items]');
+    const rxWrap  = document.getElementById('rx-rows');
+    const rxAddBtn = document.getElementById('rx-add-row');
+    if (!rxField || !rxWrap) return;
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    }
+    function makeRowEl(item) {
+        item = item || {};
+        const wrap = document.createElement('div');
+        wrap.className = 'rx-row';
+        wrap.innerHTML = ''
+          + '<input type="text" data-rx-key="name" placeholder="اسم الدواء" value="' + escapeHtml(item.name||'') + '">'
+          + '<input type="text" data-rx-key="dose" placeholder="الجرعة" value="' + escapeHtml(item.dose||'') + '">'
+          + '<input type="text" data-rx-key="frequency" placeholder="التكرار" value="' + escapeHtml(item.frequency||'') + '">'
+          + '<input type="text" data-rx-key="duration" placeholder="المدة" value="' + escapeHtml(item.duration||'') + '">'
+          + '<input type="text" data-rx-key="notes" placeholder="ملاحظات" value="' + escapeHtml(item.notes||'') + '">'
+          + '<button type="button" class="rx-remove" title="حذف"><i class="fa-solid fa-xmark"></i></button>';
+        wrap.querySelector('.rx-remove').addEventListener('click', function () { wrap.remove(); serialize(); });
+        wrap.querySelectorAll('input').forEach(i => i.addEventListener('input', serialize));
+        return wrap;
+    }
+    function serialize() {
+        const rows = [];
+        rxWrap.querySelectorAll('.rx-row').forEach(r => {
+            const item = {};
+            r.querySelectorAll('input[data-rx-key]').forEach(i => { item[i.dataset.rxKey] = i.value.trim(); });
+            if (item.name) rows.push(item);
+        });
+        rxField.value = JSON.stringify(rows);
+    }
+    let initial = [];
+    try {
+        if (rxField.value && rxField.value.trim()) {
+            const parsed = JSON.parse(rxField.value);
+            if (Array.isArray(parsed)) initial = parsed;
+        }
+    } catch (_) {}
+    if (initial.length === 0) {
+        rxWrap.appendChild(makeRowEl({}));
+    } else {
+        initial.forEach(item => rxWrap.appendChild(makeRowEl(item)));
+    }
+    rxAddBtn.addEventListener('click', function () { rxWrap.appendChild(makeRowEl({})); serialize(); });
+    const parentForm = rxField.closest('form');
+    if (parentForm) parentForm.addEventListener('submit', serialize);
+});
+</script>
 
             {# ─── المرفقات (متاحة لكل التخصصات) — قبل موعد المراجعة ─────── #}
             <div class="ui-sub-title medical-title" style="margin: 28px 0 14px;"><i class="fa-solid fa-paperclip"></i> مرفقات الزيارة</div>
@@ -171,8 +294,24 @@
                 {% endwith %}
             </div>
 
-            <div class="form-actions">
-                <button type="submit" class="btn-submit"><i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات</button>
+            {% comment %} Hidden carrier — set by whichever save button is clicked.
+               ''             → normal save (status flips to doctor_completed,
+                                so editing a consultation visit and saving
+                                normally promotes it to a completed visit).
+               'consultation' → save as consultation (status stays / becomes
+                                consultation_pending). {% endcomment %}
+            <input type="hidden" name="save_mode" id="id_save_mode" value="">
+
+            <div class="form-actions" style="flex-wrap: wrap; gap: 10px;">
+                <button type="submit" class="btn-submit"
+                        onclick="document.getElementById('id_save_mode').value=''">
+                    <i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات
+                </button>
+                <button type="submit" class="btn-submit"
+                        style="background: linear-gradient(135deg,#b45309,#f59e0b);"
+                        onclick="document.getElementById('id_save_mode').value='consultation'">
+                    <i class="fa-solid fa-user-doctor"></i> حفظ كاستشارة
+                </button>
                 <a href="{% url 'patient_detail' visit.patient.id %}" class="btn-cancel"><i class="fa-solid fa-xmark"></i> إلغاء</a>
             </div>
         </form>
@@ -245,6 +384,68 @@ document.addEventListener('DOMContentLoaded', function () {
             this.style.height = this.scrollHeight + 'px';
         });
     });
+
+    // ── Voice-to-text (Web Speech API) — mirror of doctor_complete_visit.
+    // Per-field mic button appends the recognized transcript to the target
+    // textarea/input. Falls back to hiding the buttons if the browser
+    // doesn't support speech recognition.
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+        document.querySelectorAll('.voice-btn').forEach(b => b.style.display = 'none');
+    } else {
+        let currentRec = null;
+        let currentBtn = null;
+        document.querySelectorAll('.voice-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const targetId = btn.dataset.voiceTarget;
+                const target = document.getElementById(targetId);
+                if (!target) return;
+
+                // Toggle off if this button's recognition is already running.
+                if (currentRec && currentBtn === btn) {
+                    try { currentRec.stop(); } catch (_) {}
+                    return;
+                }
+                if (currentRec) {
+                    try { currentRec.stop(); } catch (_) {}
+                }
+
+                const rec = new SpeechRec();
+                rec.lang = 'ar-SA';
+                rec.continuous = false;
+                rec.interimResults = false;
+                rec.maxAlternatives = 1;
+
+                currentRec = rec;
+                currentBtn = btn;
+                btn.classList.add('listening');
+
+                rec.onresult = function (ev) {
+                    const text = ev.results[0][0].transcript || '';
+                    if (!text) return;
+                    const existing = (target.value || '').trim();
+                    target.value = existing ? (existing + ' ' + text) : text;
+                    target.dispatchEvent(new Event('input', { bubbles: true }));
+                };
+                rec.onerror = function () {
+                    btn.classList.remove('listening');
+                    currentRec = null; currentBtn = null;
+                };
+                rec.onend = function () {
+                    btn.classList.remove('listening');
+                    currentRec = null; currentBtn = null;
+                };
+                try {
+                    rec.start();
+                } catch (err) {
+                    btn.classList.remove('listening');
+                    currentRec = null; currentBtn = null;
+                }
+            });
+        });
+    }
 
     // ── AI medical assistance — same wiring as the complete-visit page.
     const aiBtn = document.getElementById('ai-assist-btn');

@@ -82,6 +82,10 @@
 .ui-visit-header.pending {
     background: linear-gradient(135deg, #e65100, #ff9800);
 }
+/* Consultation-pending visit — half-completed, awaiting referral / lab. */
+.ui-visit-header.consultation {
+    background: linear-gradient(135deg, #b45309, #f59e0b);
+}
 .ui-visit-badge {
     background: rgba(255,255,255,0.25);
     border: 1px solid rgba(255,255,255,0.45);
@@ -223,8 +227,10 @@
 <div class="ui-patient-card">
     <h2>
         <span>{{ patient.name }}</span>
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
             <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">➕ إضافة زيارة تمريضية جديدة</a>
+            {# Both doctors and nurses can book appointments. #}
+            <a href="{% url 'book_appointment' patient.id %}" class="btn-action btn-edit" style="background:#ddd6fe; color:#3730a3;"><i class="fa-solid fa-calendar-plus"></i> احجز موعد</a>
             <a href="{% url 'edit_patient' patient.id %}" class="btn-action btn-edit"><i class="fa-solid fa-pen-to-square"></i> تعديل</a>
             {% if is_doctor %}
                 <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_patient' patient.id %}', 'حذف المريض', '{{ patient.name|escapejs }}')"><i class="fa-solid fa-trash"></i> حذف</button>
@@ -232,10 +238,10 @@
         </div>
     </h2>
     <div class="patient-grid">
-        {% if patient.age %}
+        {% if patient.age_years or patient.age %}
         <div class="patient-field">
             <div class="lbl">العمر</div>
-            <div class="val">{{ patient.age }}</div>
+            <div class="val">{{ patient.age_years|default:patient.age }} {% if patient.birth_date %}<span style="font-size:11px; color:#5a8a6a;">(تولّد {{ patient.birth_date|date:"Y" }})</span>{% endif %}</div>
         </div>
         {% endif %}
         {% if patient.phone %}
@@ -269,6 +275,31 @@
     </div>
 </div>
 
+{# ── Upcoming bookings — booked appointments + Visit follow-ups (مراجعة) #}
+{% if upcoming_bookings %}
+<div class="section-title"><i class="fa-solid fa-calendar-check"></i> المواعيد القادمة</div>
+<div class="ui-patient-card" style="background:#eef2ff; border-color:#c7d2fe;">
+    <ul style="margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:8px;">
+        {% for b in upcoming_bookings %}
+        <li style="display:flex; justify-content:space-between; align-items:center; gap:10px; background:white; padding:10px 14px; border-radius:8px; border:1px solid {% if b.kind == 'follow_up' %}#fed7aa{% else %}#c7d2fe{% endif %};">
+            <div>
+                <strong style="color:{% if b.kind == 'follow_up' %}#9a3412{% else %}#3730a3{% endif %};"><i class="fa-solid fa-clock"></i> {{ b.time|arabic_day }}، {{ b.time|date:"Y-m-d H:i" }}</strong>
+                <div style="font-size:13px; color:#475569; margin-top:3px;">
+                    {{ b.type_label }}
+                    {% if b.notes %}— {{ b.notes }}{% endif %}
+                </div>
+            </div>
+            <form method="post" action="{{ b.cancel_url }}" onsubmit="return confirm('{{ b.cancel_msg }}');" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <button type="submit" class="btn-action btn-delete" style="padding:6px 12px; font-size:12px;"><i class="fa-solid fa-xmark"></i> إلغاء</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
 {% if is_nurse %}
     {% if pending_visit %}
     <div class="section-title" style="color:#e65100; border-color:#e65100;">زيارة تم إرسالها من الإستقبال</div>
@@ -299,12 +330,10 @@
             </div>
         </div>
     </div>
-    {% else %}
-    <div class="ui-empty-card">
-        <h3 style="margin-bottom: 15px; color:#1a3d28;">إجراءات الممرضة</h3>
-        <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">➕ إضافة زيارة تمريضية جديدة</a>
-    </div>
     {% endif %}
+    {# The "إضافة زيارة تمريضية جديدة" button already lives in the patient-card
+       header above, so we no longer render a second one in an empty-state card
+       here — it was duplicated UI. #}
 {% endif %}
 
 {% if is_doctor and pending_visit %}
@@ -332,7 +361,7 @@
             {% include 'patients/_vitals_grid.html' with visit=pending_visit specs=vitals_specs %}
         </div>
         <div class="ui-actions-bar">
-            <a href="{% url 'doctor_complete_visit' pending_visit.id %}" class="btn-action btn-complete">إكمال الزيارة الطبية</a>
+            <a href="{% url 'doctor_complete_visit' pending_visit.id %}" class="btn-action btn-complete">بدء المعاينة</a>
         </div>
     </div>
 </div>
@@ -353,8 +382,8 @@
 {% if visits %}
     {% for visit in visits %}
     <div class="ui-visit-card">
-        <div class="ui-visit-header">
-            <span class="ui-visit-badge">زيارة {{ forloop.counter }}</span>
+        <div class="ui-visit-header {% if visit.status == 'consultation_pending' %}consultation{% endif %}">
+            <span class="ui-visit-badge">{% if visit.status == 'consultation_pending' %}استشارة قيد الانتظار{% else %}زيارة {{ forloop.counter }}{% endif %}</span>
             <span class="ui-visit-type">{{ visit.get_visit_type_display }}</span>
             <span class="ui-visit-date">{{ visit.created_at }}</span>
         </div>
@@ -381,7 +410,7 @@
                         {% if val %}
                         <div class="field-row {{ f.cls }}">
                             <span class="field-label">{{ f.label }}:</span>
-                            <span class="field-value">{% if f.name == 'follow_up_date' %}{{ val|date:"Y-m-d H:i" }}{% else %}{{ val }}{% endif %}</span>
+                            <span class="field-value">{% if f.name == 'follow_up_date' %}{{ val|arabic_day }} {{ val|date:"Y-m-d H:i" }}{% elif f.name == 'prescription_items' %}{{ val|format_prescription_items }}{% else %}{{ val }}{% endif %}</span>
                         </div>
                         {% endif %}
                     {% endwith %}
@@ -413,7 +442,10 @@
             </div>
             {% endif %}
             <div class="ui-actions-bar">
-                <a href="{% url 'edit_visit' visit.id %}" class="btn-action btn-edit"><i class="fa-solid fa-pen-to-square"></i> تعديل الزيارة</a>
+                <a href="{% url 'edit_visit' visit.id %}" class="btn-action btn-edit"><i class="fa-solid fa-pen-to-square"></i>{% if visit.status == 'consultation_pending' %} إكمال / تعديل الاستشارة{% else %} تعديل الزيارة{% endif %}</a>
+                {% if visit.status != 'consultation_pending' %}
+                <a href="{% url 'print_prescription' visit.id %}" target="_blank" class="btn-action btn-edit" style="background:#dbeafe; color:#1e40af;"><i class="fa-solid fa-print"></i> طباعة الوصفة</a>
+                {% endif %}
                 <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_visit' visit.id %}', 'حذف الزيارة', '{{ visit.get_visit_type_display|escapejs }}')"><i class="fa-solid fa-trash"></i> حذف الزيارة</button>
             </div>
         </div>
@@ -609,7 +641,7 @@ body {
             <h2>{{ patient.name }}</h2>
             <div class="patient-grid">
                 {% if patient.file_number %}<div class="patient-field"><div class="lbl">رقم الملف</div><div class="val">{{ patient.file_number }}</div></div>{% endif %}
-                {% if patient.age %}<div class="patient-field"><div class="lbl">العمر</div><div class="val">{{ patient.age }}</div></div>{% endif %}
+                {% if patient.age_years or patient.age %}<div class="patient-field"><div class="lbl">العمر</div><div class="val">{{ patient.age_years|default:patient.age }}</div></div>{% endif %}
                 {% if patient.phone %}<div class="patient-field"><div class="lbl">الهاتف</div><div class="val">{{ patient.phone }}</div></div>{% endif %}
                 {% if patient.gender %}<div class="patient-field"><div class="lbl">الجنس</div><div class="val">{% if patient.gender|lower == 'male' %}ذكر{% elif patient.gender|lower == 'female' %}أنثى{% else %}{{ patient.get_gender_display }}{% endif %}</div></div>{% endif %}
                 {% if patient.address %}<div class="patient-field wide"><div class="lbl">العنوان</div><div class="val">{{ patient.address }}</div></div>{% endif %}
@@ -648,7 +680,7 @@ body {
                             {% if val %}
                             <div class="field-row {{ f.cls }}">
                                 <span class="field-label">{{ f.label }}:</span>
-                                <span class="field-value">{% if f.name == 'follow_up_date' %}{{ val|date:"Y-m-d H:i" }}{% else %}{{ val }}{% endif %}</span>
+                                <span class="field-value">{% if f.name == 'follow_up_date' %}{{ val|arabic_day }} {{ val|date:"Y-m-d H:i" }}{% elif f.name == 'prescription_items' %}{{ val|format_prescription_items }}{% else %}{{ val }}{% endif %}</span>
                             </div>
                             {% endif %}
                         {% endwith %}

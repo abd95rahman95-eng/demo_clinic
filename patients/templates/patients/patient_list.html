@@ -16,16 +16,39 @@
 <div class="controls-card">
     <div class="filters-row">
         <span class="filter-label">تصفية حسب الحالة:</span>
-        <a href="?filter=" class="filter-chip {% if not filter_type %}active{% endif %}">الكل</a>
-        <a href="?filter=pending" class="filter-chip {% if filter_type == 'pending' %}active{% endif %}">زيارات معلقة</a>
-        <a href="?filter=completed" class="filter-chip {% if filter_type == 'completed' %}active{% endif %}">زيارات مكتملة</a>
-        <a href="?filter=none" class="filter-chip {% if filter_type == 'none' %}active{% endif %}">بدون زيارات</a>
+        <a href="?filter={% if request.GET.action %}&action={{ request.GET.action }}{% endif %}" class="filter-chip {% if not filter_type %}active{% endif %}">الكل</a>
+        <a href="?filter=pending{% if request.GET.action %}&action={{ request.GET.action }}{% endif %}" class="filter-chip {% if filter_type == 'pending' %}active{% endif %}">زيارات معلقة</a>
+        <a href="?filter=completed{% if request.GET.action %}&action={{ request.GET.action }}{% endif %}" class="filter-chip {% if filter_type == 'completed' %}active{% endif %}">زيارات مكتملة</a>
+        <a href="?filter=consultation{% if request.GET.action %}&action={{ request.GET.action }}{% endif %}" class="filter-chip {% if filter_type == 'consultation' %}active{% endif %}" style="{% if filter_type == 'consultation' %}background:#fbbf24;color:#7c2d12;{% endif %}">استشارة</a>
+        <a href="?filter=none{% if request.GET.action %}&action={{ request.GET.action }}{% endif %}" class="filter-chip {% if filter_type == 'none' %}active{% endif %}">بدون زيارات</a>
     </div>
 </div>
 
+{% if request.GET.action == 'book' %}
+<div class="message-box message-warning" style="margin-bottom: 16px;">
+    <i class="fa-solid fa-calendar-plus"></i> اختر مريضاً من القائمة أدناه لحجز موعد له.
+</div>
+{% endif %}
+
+<style>
+/* Visual treatment for the new "consultation" status. */
+.patient-card-modern.patient-consultation {
+    border-color: #f59e0b;
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+}
+.patient-card-modern.patient-consultation .patient-status-badge {
+    background: #f59e0b;
+    color: #7c2d12;
+}
+</style>
+
 <div class="patient-grid-list">
     {% for item in patients_with_status %}
+        {% if request.GET.action == 'book' %}
+        <a href="{% url 'book_appointment' item.patient.id %}" class="patient-card-modern {{ item.card_class }}">
+        {% else %}
         <a href="{% url 'patient_detail' item.patient.id %}" class="patient-card-modern {{ item.card_class }}">
+        {% endif %}
             <h2>{{ item.patient.name }}</h2>
 
             <div class="patient-card-body">
@@ -33,7 +56,7 @@
                     <strong>رقم الملف:</strong> <span>{{ item.patient.file_number|default:"—" }}</span>
                 </div>
                 <div class="patient-info-row">
-                    <strong>العمر:</strong> <span>{{ item.patient.age|default:"—" }}</span>
+                    <strong>العمر:</strong> <span>{{ item.patient.age_years|default:item.patient.age|default:"—" }}</span>
                 </div>
                 <div class="patient-info-row">
                     <strong>الهاتف:</strong> <span>{{ item.patient.phone|default:"—" }}</span>

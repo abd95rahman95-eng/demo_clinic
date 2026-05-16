@@ -82,6 +82,11 @@
                 {% else %}
                     <a href="{% url 'patient_detail' visit.patient.id %}" class="btn-cancel"><i class="fa-solid fa-xmark"></i> إلغاء</a>
                 {% endif %}
+                {% if visit.status == 'nurse_draft' %}
+                    <a href="{% url 'delete_visit' visit.id %}" class="btn-cancel" style="background:#fef2f2; color:#b91c1c; border:1px solid #fecaca;">
+                        <i class="fa-solid fa-trash"></i> حذف المسودة
+                    </a>
+                {% endif %}
             </div>
         </form>
     </div>

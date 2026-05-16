@@ -1,0 +1,1646 @@
+{% comment %}
+Dental chart v2 — 2D SVG, mode-driven (Examination / Plan / Procedures).
+
+Required context:
+    patient            — Patient instance (required)
+    visit              — Visit instance or None (None disables Procedures mode)
+    dental_v2_data     — Dict produced by views._dental_chart_context():
+                         { statuses, plan_steps, procedures, history, snapshot }
+    dental_v2_choices  — Dict of (code, label) lists:
+                         { conditions, surfaces, procedures, priorities }
+
+This partial owns the whole chart UI (anatomical 2D SVG chart + mode tabs +
+contextual info panel underneath). The page hosting it just supplies context.
+All state is local to the partial — server-side state changes go through the
+`api/dental/...` endpoints defined in urls.py.
+{% endcomment %}
+
+<style>
+    /* ─── Outer card ───────────────────────────────────────────────── */
+    .dchart3d-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 18px 18px 22px;
+        margin: 20px 0;
+        position: relative;
+    }
+    .dchart3d-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .dchart3d-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: #1a3d28;
+        margin: 0;
+    }
+    .dchart3d-sub {
+        font-size: 12px;
+        color: #6b7280;
+    }
+
+    /* ─── Mode tabs ────────────────────────────────────────────────── */
+    .dchart3d-modes {
+        display: inline-flex;
+        background: #f1f5f9;
+        border-radius: 999px;
+        padding: 4px;
+        gap: 4px;
+    }
+    .dchart3d-mode {
+        background: transparent;
+        border: none;
+        border-radius: 999px;
+        padding: 8px 16px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        color: #475569;
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+    }
+    .dchart3d-mode:hover { color: #1a3d28; }
+    .dchart3d-mode.is-active {
+        background: #1a6b3c;
+        color: white;
+        box-shadow: 0 2px 6px rgba(26, 107, 60, 0.25);
+    }
+    .dchart3d-mode[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+    /* ─── SVG viewport ─────────────────────────────────────────────── */
+    .dchart3d-viewport {
+        position: relative;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
+        overflow-x: auto;
+        padding: 14px 8px 12px;
+    }
+    .dchart3d-svg {
+        display: block;
+        margin: 0 auto;
+        width: 100%;
+        max-width: 980px;
+        min-width: 760px;
+        height: auto;
+    }
+    .dchart3d-mode-hint {
+        position: absolute;
+        top: 10px;
+        right: 14px;
+        background: rgba(15, 23, 42, 0.78);
+        color: #f8fafc;
+        font-size: 12px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-weight: 600;
+        pointer-events: none;
+        z-index: 4;
+    }
+    .dchart3d-hover-tag {
+        position: absolute;
+        pointer-events: none;
+        background: #0f172a;
+        color: #f8fafc;
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        white-space: nowrap;
+        transform: translate(-50%, -120%);
+        opacity: 0;
+        transition: opacity 0.12s;
+        font-weight: 600;
+        z-index: 5;
+    }
+    .dchart3d-hover-tag.is-show { opacity: 1; }
+
+    /* ─── Tooth surfaces (anatomical SVG) ──────────────────────────── */
+    .tooth-surface {
+        fill: #ffffff;
+        stroke: #94a3b8;
+        stroke-width: 1;
+        cursor: pointer;
+        transition: fill 0.12s, stroke 0.12s;
+    }
+    .tooth-surface:hover { stroke: #1a6b3c; stroke-width: 1.8; }
+
+    /* Examination condition colors (also used by legend swatches) */
+    .tooth-surface.cond-healthy          { fill: #ffffff; }
+    .tooth-surface.cond-caries           { fill: #b02a37; }
+    .tooth-surface.cond-existing_filling { fill: #2563eb; }
+    .tooth-surface.cond-existing_crown   { fill: #f59e0b; }
+    .tooth-surface.cond-existing_rct     { fill: #7c3aed; }
+    .tooth-surface.cond-fracture         { fill: #ef4444; opacity: 0.92; }
+    .tooth-surface.cond-wear             { fill: #fde68a; }
+    .tooth-surface.cond-missing          { fill: #6b7280; }
+    .tooth-surface.cond-implant          { fill: #14b8a6; }
+    .tooth-surface.cond-discoloration    { fill: #a16207; }
+
+    /* Procedure-done tint (lighter so the underlying examination color
+       remains partly visible — we apply this via a separate overlay rect) */
+    .surface-proc-overlay {
+        pointer-events: none;
+        fill-opacity: 0.55;
+        stroke: #166534;
+        stroke-width: 1.2;
+    }
+    .surface-proc-overlay.proc-filling_composite { fill: #86efac; }
+    .surface-proc-overlay.proc-filling_amalgam   { fill: #a3a3a3; }
+    .surface-proc-overlay.proc-rct               { fill: #a78bfa; }
+    .surface-proc-overlay.proc-extraction        { fill: #4b5563; fill-opacity: 0.85; }
+    .surface-proc-overlay.proc-crown             { fill: #fbbf24; }
+    .surface-proc-overlay.proc-crown_temp        { fill: #fed7aa; }
+    .surface-proc-overlay.proc-bridge            { fill: #f97316; }
+    .surface-proc-overlay.proc-implant           { fill: #14b8a6; }
+    .surface-proc-overlay.proc-cleaning          { fill: #bbf7d0; }
+    .surface-proc-overlay.proc-whitening         { fill: #f1f5f9; }
+    .surface-proc-overlay.proc-post_core         { fill: #c4b5fd; }
+    .surface-proc-overlay.proc-other             { fill: #cbd5e1; }
+
+    /* Plan overlay — dashed orange border drawn ON TOP of the surface */
+    .surface-plan-overlay {
+        pointer-events: none;
+        fill: none;
+        stroke: #f97316;
+        stroke-width: 2.2;
+        stroke-dasharray: 4,3;
+    }
+    .surface-plan-overlay.plan-in-progress {
+        stroke: #fbbf24;
+        stroke-dasharray: 2,2;
+    }
+    .surface-plan-overlay.plan-done {
+        stroke: #16a34a;
+        stroke-dasharray: 0;
+    }
+
+    /* Roots (tapered path shapes) */
+    .tooth-root {
+        fill: #f8fafc;
+        stroke: #94a3b8;
+        stroke-width: 1;
+        cursor: pointer;
+        transition: fill 0.12s, stroke 0.12s;
+    }
+    .tooth-root:hover { stroke: #1a6b3c; stroke-width: 1.6; }
+    .tooth-root.cond-healthy          { fill: #f8fafc; }
+    .tooth-root.cond-caries           { fill: #b02a37; }
+    .tooth-root.cond-existing_filling { fill: #2563eb; }
+    .tooth-root.cond-existing_crown   { fill: #f59e0b; }
+    .tooth-root.cond-existing_rct     { fill: #7c3aed; }
+    .tooth-root.cond-fracture         { fill: #ef4444; }
+    .tooth-root.cond-wear             { fill: #fde68a; }
+    .tooth-root.cond-missing          { fill: #6b7280; }
+    .tooth-root.cond-implant          { fill: #14b8a6; }
+    .tooth-root.cond-discoloration    { fill: #a16207; }
+
+    .root-label {
+        font-size: 8px;
+        fill: #475569;
+        text-anchor: middle;
+        pointer-events: none;
+        user-select: none;
+        font-weight: 700;
+    }
+
+    /* Tooth-number label (clickable as the "whole tooth" target) */
+    .tooth-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-anchor: middle;
+        fill: #1f2937;
+        cursor: pointer;
+        user-select: none;
+    }
+    .tooth-label-bg { fill: transparent; cursor: pointer; }
+    .tooth-label-bg:hover + .tooth-label, .tooth-label:hover { fill: #1a6b3c; }
+
+    /* Whole-tooth overlay (entire tooth marked missing/implant/etc.) */
+    .tooth-whole-overlay {
+        pointer-events: none;
+        opacity: 0.78;
+        stroke: #1f2937;
+        stroke-width: 1;
+        stroke-dasharray: 4,3;
+    }
+    .tooth-whole-overlay.cond-missing { fill: #6b7280; }
+    .tooth-whole-overlay.cond-implant { fill: #14b8a6; }
+    .tooth-whole-overlay.cond-existing_crown { fill: #f59e0b; }
+    .tooth-whole-overlay.cond-fracture { fill: #ef4444; }
+
+    .quadrant-divider {
+        stroke: #cbd5e1;
+        stroke-dasharray: 3,3;
+    }
+
+    /* ─── Info panel (below chart) ─────────────────────────────────── */
+    .dchart3d-info {
+        margin-top: 18px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #ffffff;
+    }
+    .dchart3d-info-section {
+        padding: 14px 16px;
+        border-top: 1px solid #e2e8f0;
+    }
+    .dchart3d-info-section:first-child { border-top: none; }
+    .dchart3d-info-h {
+        font-size: 14px;
+        font-weight: 800;
+        color: #1a3d28;
+        margin: 0 0 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .dchart3d-info-empty {
+        font-size: 13px;
+        color: #94a3b8;
+        font-style: italic;
+    }
+    .dchart3d-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .dchart3d-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #f1f5f9;
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: 12px;
+        color: #1f2937;
+    }
+    .dchart3d-legend-swatch {
+        width: 12px; height: 12px;
+        border-radius: 3px;
+        border: 1px solid #94a3b8;
+    }
+    .dchart3d-list {
+        list-style: none;
+        margin: 0; padding: 0;
+        max-height: 240px;
+        overflow-y: auto;
+    }
+    .dchart3d-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+    }
+    .dchart3d-row + .dchart3d-row { margin-top: 4px; }
+    .dchart3d-row:hover { background: #f8fafc; border-color: #e2e8f0; }
+    .dchart3d-row-main { flex: 1; min-width: 0; }
+    .dchart3d-row-title { font-size: 13px; font-weight: 700; color: #1e293b; }
+    .dchart3d-row-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .dchart3d-row-actions { display: inline-flex; gap: 4px; }
+    .dchart3d-tag {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        background: #f1f5f9;
+        color: #475569;
+        margin-left: 4px;
+    }
+    .dchart3d-tag.is-urgent    { background: #fecaca; color: #7f1d1d; }
+    .dchart3d-tag.is-necessary { background: #fde68a; color: #78350f; }
+    .dchart3d-tag.is-optional  { background: #c7d2fe; color: #312e81; }
+    .dchart3d-tag.is-done      { background: #bbf7d0; color: #14532d; }
+    .dchart3d-tag.is-pending   { background: #fef3c7; color: #78350f; }
+    .dchart3d-tag.is-progress  { background: #bfdbfe; color: #1e3a8a; }
+    .dchart3d-btn {
+        background: #f1f5f9;
+        color: #1f2937;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 4px 9px;
+        font-size: 12px;
+        font-family: inherit;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .dchart3d-btn:hover { border-color: #1a6b3c; color: #1a6b3c; }
+    .dchart3d-btn.is-danger { background: #fef2f2; color: #b02a37; border-color: #fecaca; }
+    .dchart3d-btn.is-danger:hover { background: #fee2e2; color: #7f1d1d; }
+    .dchart3d-btn.is-primary { background: #1a6b3c; color: white; border-color: #1a6b3c; }
+    .dchart3d-btn.is-primary:hover { background: #155e34; color: white; }
+
+    /* ─── Picker dialog ────────────────────────────────────────────── */
+    .dchart3d-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        z-index: 1600;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+    }
+    .dchart3d-overlay.is-show { display: flex; }
+    .dchart3d-dialog {
+        background: white;
+        border-radius: 14px;
+        width: min(520px, 96vw);
+        max-height: 92vh;
+        overflow-y: auto;
+        padding: 20px 22px;
+        box-shadow: 0 24px 70px rgba(0,0,0,0.3);
+    }
+    .dchart3d-dialog h3 { margin: 0 0 4px; font-size: 17px; font-weight: 800; color: #1a3d28; }
+    .dchart3d-dialog .dchart3d-sub-d { font-size: 12px; color: #6b7280; margin-bottom: 14px; }
+    .dchart3d-form-row { margin-bottom: 12px; }
+    .dchart3d-form-row label {
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 4px;
+    }
+    .dchart3d-input, .dchart3d-select, .dchart3d-textarea {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        font-family: inherit;
+        font-size: 13px;
+        box-sizing: border-box;
+        background: white;
+    }
+    .dchart3d-textarea { min-height: 60px; resize: vertical; }
+    .dchart3d-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .dchart3d-cond-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 9px 10px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: #1f2937;
+        cursor: pointer;
+        text-align: right;
+        transition: border-color 0.1s, background 0.1s;
+    }
+    .dchart3d-cond-btn:hover { border-color: #1a6b3c; }
+    .dchart3d-cond-btn.is-selected { border-color: #1a6b3c; background: #ecfdf5; }
+    .dchart3d-cond-dot {
+        width: 14px; height: 14px;
+        border-radius: 3px;
+        border: 1px solid #94a3b8;
+        flex-shrink: 0;
+    }
+    .dchart3d-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+    .dchart3d-actions .dchart3d-btn { padding: 8px 14px; font-size: 13px; }
+    .dchart3d-selected-summary {
+        background: #f1f5f9;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 12px;
+        color: #1e293b;
+        margin-bottom: 12px;
+    }
+    .dchart3d-selected-summary b { color: #1a3d28; }
+    .dchart3d-compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+        margin-top: 8px;
+    }
+    .dchart3d-compare-cell {
+        background: #f8fafc;
+        border-radius: 10px;
+        padding: 10px 12px;
+        border: 1px solid #e2e8f0;
+    }
+    .dchart3d-compare-cell .lbl {
+        font-size: 11px;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .dchart3d-compare-cell .val {
+        font-size: 22px;
+        font-weight: 800;
+        color: #1a3d28;
+        margin-top: 2px;
+    }
+    .dchart3d-compare-cell.is-remaining .val { color: #b45309; }
+
+    /* Hide sections by mode */
+    .dchart3d-info[data-mode="examination"] .for-plan,
+    .dchart3d-info[data-mode="examination"] .for-procedures { display: none; }
+    .dchart3d-info[data-mode="plan"] .for-examination,
+    .dchart3d-info[data-mode="plan"] .for-procedures { display: none; }
+    .dchart3d-info[data-mode="procedures"] .for-examination,
+    .dchart3d-info[data-mode="procedures"] .for-plan { display: none; }
+</style>
+
+<div class="dchart3d-card" id="dchart3d-root">
+    <div class="dchart3d-header">
+        <div>
+            <h2 class="dchart3d-title">🦷 المخطط السني</h2>
+        </div>
+        <div class="dchart3d-modes" role="tablist" aria-label="Dental chart mode">
+            <button type="button" class="dchart3d-mode is-active" data-mode="examination" role="tab">معاينة</button>
+            <button type="button" class="dchart3d-mode" data-mode="plan" role="tab">خطة العلاج</button>
+            <button type="button" class="dchart3d-mode" data-mode="procedures" role="tab"
+                    {% if not visit %}disabled title="افتح زيارة أولاً لتسجيل الإجراءات"{% endif %}>الإجراءات</button>
+        </div>
+    </div>
+
+    <div class="dchart3d-viewport" id="dchart3d-viewport">
+        <div class="dchart3d-mode-hint" id="dchart3d-mode-hint">وضع المعاينة</div>
+        <svg class="dchart3d-svg" id="dchart3d-svg" viewBox="0 0 760 285" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="dchart3d-hover-tag" id="dchart3d-hover-tag"></div>
+    </div>
+
+    <!-- Contextual info panel -->
+    <div class="dchart3d-info" id="dchart3d-info" data-mode="examination">
+        <!-- Examination -->
+        <div class="dchart3d-info-section for-examination">
+            <h4 class="dchart3d-info-h"><i class="fa-solid fa-circle-info"></i> دليل الألوان</h4>
+            <div class="dchart3d-legend" id="dchart3d-legend"></div>
+        </div>
+        <div class="dchart3d-info-section for-examination">
+            <h4 class="dchart3d-info-h"><i class="fa-solid fa-list-check"></i> سجل المعاينة</h4>
+            <ul class="dchart3d-list" id="dchart3d-status-list"></ul>
+        </div>
+
+        <!-- Plan -->
+        <div class="dchart3d-info-section for-plan">
+            <h4 class="dchart3d-info-h"><i class="fa-solid fa-clipboard-list"></i> الخطط النشطة</h4>
+            <ul class="dchart3d-list" id="dchart3d-plan-list"></ul>
+        </div>
+        <div class="dchart3d-info-section for-plan">
+            <h4 class="dchart3d-info-h"><i class="fa-solid fa-circle-check"></i> الخطوات المُنجَزة</h4>
+            <ul class="dchart3d-list" id="dchart3d-plan-done-list"></ul>
+        </div>
+
+        <!-- Procedures -->
+        <div class="dchart3d-info-section for-procedures">
+            <h4 class="dchart3d-info-h"><i class="fa-solid fa-stethoscope"></i> ملخص الزيارة</h4>
+            <div class="dchart3d-compare" id="dchart3d-compare"></div>
+        </div>
+        <div class="dchart3d-info-section for-procedures">
+            <h4 class="dchart3d-info-h"><i class="fa-solid fa-check-double"></i> إجراءات الزيارة الحالية</h4>
+            <ul class="dchart3d-list" id="dchart3d-proc-list"></ul>
+        </div>
+        <div class="dchart3d-info-section for-procedures">
+            <h4 class="dchart3d-info-h"><i class="fa-solid fa-clock-rotate-left"></i> آخر الإجراءات السابقة</h4>
+            <ul class="dchart3d-list" id="dchart3d-history-list"></ul>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Picker dialog ───────────────────────────────────────────── -->
+<div class="dchart3d-overlay" id="dchart3d-overlay">
+    <div class="dchart3d-dialog" role="dialog" aria-modal="true">
+        <h3 id="dchart3d-dialog-title">—</h3>
+        <div class="dchart3d-sub-d" id="dchart3d-dialog-sub"></div>
+        <div class="dchart3d-selected-summary" id="dchart3d-selected-summary"></div>
+
+        <!-- Examination form -->
+        <div id="dchart3d-form-exam">
+            <div class="dchart3d-form-row">
+                <label>الحالة</label>
+                <div class="dchart3d-grid" id="dchart3d-exam-grid"></div>
+            </div>
+            <div class="dchart3d-form-row">
+                <label>ملاحظة (اختياري)</label>
+                <input type="text" class="dchart3d-input" id="dchart3d-exam-note" maxlength="200">
+            </div>
+        </div>
+
+        <!-- Plan form -->
+        <div id="dchart3d-form-plan" style="display:none;">
+            <div class="dchart3d-form-row">
+                <label>نوع الإجراء</label>
+                <select class="dchart3d-select" id="dchart3d-plan-procedure"></select>
+            </div>
+            <div class="dchart3d-form-row">
+                <label>الأولوية</label>
+                <select class="dchart3d-select" id="dchart3d-plan-priority"></select>
+            </div>
+            <div class="dchart3d-form-row" id="dchart3d-plan-canals-row" style="display:none;">
+                <label>القنوات (سحب العصب)</label>
+                <input type="text" class="dchart3d-input" id="dchart3d-plan-canals"
+                       placeholder="مثال: MB,DB,P" maxlength="120">
+            </div>
+            <div class="dchart3d-form-row">
+                <label>ملاحظات</label>
+                <textarea class="dchart3d-textarea" id="dchart3d-plan-notes" maxlength="300"></textarea>
+            </div>
+        </div>
+
+        <!-- Procedures form -->
+        <div id="dchart3d-form-proc" style="display:none;">
+            <div class="dchart3d-form-row">
+                <label>نوع الإجراء</label>
+                <select class="dchart3d-select" id="dchart3d-proc-procedure"></select>
+            </div>
+            <div class="dchart3d-form-row">
+                <label>المادة (اختياري)</label>
+                <input type="text" class="dchart3d-input" id="dchart3d-proc-material" maxlength="80">
+            </div>
+            <div class="dchart3d-form-row" id="dchart3d-proc-canals-row" style="display:none;">
+                <label>القنوات (سحب العصب)</label>
+                <input type="text" class="dchart3d-input" id="dchart3d-proc-canals" maxlength="120">
+            </div>
+            <div class="dchart3d-form-row" id="dchart3d-proc-link-row" style="display:none;">
+                <label>ربط بخطوة من خطة العلاج</label>
+                <select class="dchart3d-select" id="dchart3d-proc-link"></select>
+            </div>
+            <div class="dchart3d-form-row" id="dchart3d-proc-extra-row" style="display:none;">
+                <label>أسطح إضافية (اضغط لتحديد متعدد)</label>
+                <div class="dchart3d-grid" id="dchart3d-proc-extras"></div>
+            </div>
+            <div class="dchart3d-form-row">
+                <label>ملاحظات</label>
+                <textarea class="dchart3d-textarea" id="dchart3d-proc-notes" maxlength="400"></textarea>
+            </div>
+        </div>
+
+        <div class="dchart3d-actions">
+            <button type="button" class="dchart3d-btn" id="dchart3d-cancel">إلغاء</button>
+            <button type="button" class="dchart3d-btn is-danger" id="dchart3d-clear" style="display:none;">مسح</button>
+            <button type="button" class="dchart3d-btn is-primary" id="dchart3d-save">حفظ</button>
+        </div>
+    </div>
+</div>
+
+{{ dental_v2_data|json_script:"dchart3d-data" }}
+{{ dental_v2_choices|json_script:"dchart3d-choices" }}
+
+<script>
+(function () {
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────
+// 0. Static config & data passed from the server
+// ─────────────────────────────────────────────────────────────────
+var PATIENT_ID = {{ patient.id }};
+var VISIT_ID = {% if visit %}{{ visit.id }}{% else %}null{% endif %};
+var CSRF = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+
+var URLS = {
+    status:          "{% url 'dental_update_status' patient.id %}",
+    plan_create:     "{% url 'dental_create_plan_step' patient.id %}",
+    plan_update_tpl: "{% url 'dental_update_plan_step' patient.id 0 %}".replace('/0/', '/__ID__/'),
+    plan_delete_tpl: "{% url 'dental_delete_plan_step' patient.id 0 %}".replace('/0/', '/__ID__/'),
+    {% if visit %}
+    proc_create:     "{% url 'dental_create_procedure' visit.id %}",
+    proc_delete_tpl: "{% url 'dental_delete_procedure' visit.id 0 %}".replace('/0/', '/__ID__/')
+    {% else %}
+    proc_create: null,
+    proc_delete_tpl: null
+    {% endif %}
+};
+
+var INITIAL = JSON.parse(document.getElementById('dchart3d-data').textContent || '{}');
+var CHOICES = JSON.parse(document.getElementById('dchart3d-choices').textContent || '{}');
+
+function choiceMap(arr) {
+    var m = {};
+    (arr || []).forEach(function (pair) { m[pair[0]] = pair[1]; });
+    return m;
+}
+var SURFACE_LABELS    = choiceMap(CHOICES.surfaces);
+var CONDITION_LABELS  = choiceMap(CHOICES.conditions);
+var PROCEDURE_LABELS  = choiceMap(CHOICES.procedures);
+var PRIORITY_LABELS   = choiceMap(CHOICES.priorities);
+
+// Color map mirrors the CSS .cond-* classes (used for legend swatches and
+// for the small color dot in the condition picker).
+var CONDITION_COLORS = {
+    healthy:          '#ffffff',
+    caries:           '#b02a37',
+    existing_filling: '#2563eb',
+    existing_crown:   '#f59e0b',
+    existing_rct:     '#7c3aed',
+    fracture:         '#ef4444',
+    wear:             '#fde68a',
+    missing:          '#6b7280',
+    implant:          '#14b8a6',
+    discoloration:    '#a16207'
+};
+
+// FDI numbering
+var UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11];
+var UPPER_LEFT  = [21, 22, 23, 24, 25, 26, 27, 28];
+var LOWER_LEFT  = [31, 32, 33, 34, 35, 36, 37, 38];
+var LOWER_RIGHT = [48, 47, 46, 45, 44, 43, 42, 41];
+var UPPER = UPPER_RIGHT.concat(UPPER_LEFT);
+var LOWER = LOWER_RIGHT.concat(LOWER_LEFT);
+
+// Anatomical groups (anteriors have no occlusal; molars are multi-rooted)
+var ANTERIOR_TEETH   = new Set(['11','12','13','21','22','23','31','32','33','41','42','43']);
+var THREE_ROOT_TEETH = new Set(['16','17','18','26','27','28']);
+var TWO_ROOT_TEETH   = new Set(['36','37','38','46','47','48']);
+
+// ─────────────────────────────────────────────────────────────────
+// 1. State
+// ─────────────────────────────────────────────────────────────────
+var state = {
+    mode: 'examination',
+    statuses: {},
+    planSteps: {},
+    procedures: {},
+    history: INITIAL.history || [],
+    snapshot: new Set(INITIAL.snapshot || []),
+    selection: null,
+    extraSurfaces: new Set()
+};
+(INITIAL.statuses || []).forEach(function (s) {
+    state.statuses[s.tooth + '-' + s.surface] = s;
+});
+(INITIAL.plan_steps || []).forEach(function (st) { state.planSteps[st.id] = st; });
+(INITIAL.procedures || []).forEach(function (p) { state.procedures[p.id] = p; });
+
+// ─────────────────────────────────────────────────────────────────
+// 2. Network helper
+// ─────────────────────────────────────────────────────────────────
+function api(url, body) {
+    return fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify(body || {})
+    }).then(function (r) {
+        if (!r.ok) {
+            return r.text().then(function (t) {
+                return { ok: false, status: r.status, error: t.slice(0, 200) };
+            });
+        }
+        return r.json();
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 3. SVG building (anatomical 2D chart — ported from the proven layout)
+// ─────────────────────────────────────────────────────────────────
+var svg = document.getElementById('dchart3d-svg');
+var SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Layout constants (px in the 760x285 viewBox)
+var TOOTH_W = 40, TOOTH_H = 60, ROOT_H = 32, GAP_X = 5, ROW_GAP = 26;
+var TOTAL_COLS = 16;
+var CHART_W = TOTAL_COLS * (TOOTH_W + GAP_X) - GAP_X;
+var ORIGIN_X = (760 - CHART_W) / 2;
+var UP_ROOT_Y  = 30;
+var UP_TOOTH_Y = UP_ROOT_Y + ROOT_H;
+var UP_LABEL_Y = UP_TOOTH_Y + TOOTH_H + 14;
+var LO_TOOTH_Y = UP_LABEL_Y + ROW_GAP;
+var LO_ROOT_Y  = LO_TOOTH_Y + TOOTH_H;
+var LO_LABEL_Y = LO_ROOT_Y + ROOT_H + 14;
+
+// Lookup: "tooth-surface" -> SVG element (so paint operations are O(1))
+var SURFACE_ELEMENTS = {};
+
+function svgEl(name, attrs) {
+    var el = document.createElementNS(SVG_NS, name);
+    if (attrs) for (var k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+}
+
+// Tapered root path. Upper: wide at bottom (gum), narrows to tip at top.
+// Lower: mirrored.
+function rootPath(x, y, w, h, isUpper) {
+    var taper = w * 0.30;
+    var tipY = isUpper ? y : (y + h);
+    var baseY = isUpper ? (y + h) : y;
+    var tipPad = w * 0.18;
+    var leftBaseX = x;
+    var rightBaseX = x + w;
+    var leftTipX = x + taper;
+    var rightTipX = x + w - taper;
+    var midY = (tipY + baseY) / 2;
+    return 'M ' + leftBaseX + ' ' + baseY +
+           ' C ' + (leftBaseX + 1) + ' ' + midY + ', ' +
+                   (leftTipX - 2) + ' ' + (tipY + (isUpper ? 4 : -4)) + ', ' +
+                   (leftTipX + tipPad / 2) + ' ' + tipY +
+           ' L ' + (rightTipX - tipPad / 2) + ' ' + tipY +
+           ' C ' + (rightTipX + 2) + ' ' + (tipY + (isUpper ? 4 : -4)) + ', ' +
+                   (rightBaseX - 1) + ' ' + midY + ', ' +
+                   rightBaseX + ' ' + baseY +
+           ' Z';
+}
+
+function rootSpecsFor(tooth) {
+    var t = String(tooth);
+    var quadrant = parseInt(t[0], 10);
+    var rightQuadrant = (quadrant === 1 || quadrant === 4);
+    if (THREE_ROOT_TEETH.has(t)) {
+        // Upper molars: Mesiobuccal, Palatal, Distobuccal
+        var s3 = [
+            { code: 'MR', label: 'M' },
+            { code: 'PR', label: 'P' },
+            { code: 'DR', label: 'D' }
+        ];
+        return rightQuadrant ? s3.slice().reverse() : s3;
+    }
+    if (TWO_ROOT_TEETH.has(t)) {
+        var s2 = [
+            { code: 'MR', label: 'M' },
+            { code: 'DR', label: 'D' }
+        ];
+        return rightQuadrant ? s2.slice().reverse() : s2;
+    }
+    return [{ code: 'R', label: '' }];
+}
+
+function buildRoots(tnum, x, isUpper) {
+    var out = [];
+    var specs = rootSpecsFor(tnum);
+    var n = specs.length;
+    var totalW = TOOTH_W - 4;
+    var rootGap = (n > 1) ? 2 : 0;
+    var rootW = (totalW - (n - 1) * rootGap) / n;
+    var rootBaseX = x + 2;
+    var rootY = isUpper ? UP_ROOT_Y : LO_ROOT_Y;
+    for (var i = 0; i < n; i++) {
+        var rx = rootBaseX + i * (rootW + rootGap);
+        var path = svgEl('path', {
+            'class': 'tooth-root',
+            'data-tooth': tnum,
+            'data-surface': specs[i].code,
+            d: rootPath(rx, rootY, rootW, ROOT_H, isUpper)
+        });
+        SURFACE_ELEMENTS[tnum + '-' + specs[i].code] = path;
+        out.push(path);
+        if (specs[i].label) {
+            var labelY = isUpper ? (rootY + ROOT_H - 6) : (rootY + 10);
+            var lbl = svgEl('text', {
+                'class': 'root-label',
+                x: rx + rootW / 2, y: labelY
+            });
+            lbl.textContent = specs[i].label;
+            out.push(lbl);
+        }
+    }
+    return out;
+}
+
+function buildCrown(tnum, x, isUpper) {
+    var out = [];
+    var toothY = isUpper ? UP_TOOTH_Y : LO_TOOTH_Y;
+    var quadrant = parseInt(String(tnum)[0], 10);
+    var mesialIsRight = (quadrant === 1 || quadrant === 4);
+    var leftSurface  = mesialIsRight ? 'D' : 'M';
+    var rightSurface = mesialIsRight ? 'M' : 'D';
+    var topSurface    = isUpper ? 'B' : 'L';
+    var bottomSurface = isUpper ? 'L' : 'B';
+    var bandH = TOOTH_H / 3;
+    function rect(surface, x_, y_, w_, h_) {
+        var r = svgEl('rect', {
+            'class': 'tooth-surface',
+            'data-tooth': tnum, 'data-surface': surface,
+            x: x_, y: y_, width: w_, height: h_
+        });
+        SURFACE_ELEMENTS[tnum + '-' + surface] = r;
+        out.push(r);
+    }
+    if (ANTERIOR_TEETH.has(String(tnum))) {
+        // 4-zone: top / (M | D) / bottom — no occlusal
+        rect(topSurface,    x,                  toothY,                TOOTH_W,       bandH);
+        rect(leftSurface,   x,                  toothY + bandH,        TOOTH_W / 2,   bandH);
+        rect(rightSurface,  x + TOOTH_W / 2,    toothY + bandH,        TOOTH_W / 2,   bandH);
+        rect(bottomSurface, x,                  toothY + 2 * bandH,    TOOTH_W,       bandH);
+    } else {
+        // 5-zone: top / (D | O | M) / bottom
+        var cellW = TOOTH_W / 3;
+        rect(topSurface,    x,                 toothY,             TOOTH_W,    bandH);
+        rect(leftSurface,   x,                 toothY + bandH,     cellW,      bandH);
+        rect('O',           x + cellW,         toothY + bandH,     cellW,      bandH);
+        rect(rightSurface,  x + 2 * cellW,     toothY + bandH,     cellW,      bandH);
+        rect(bottomSurface, x,                 toothY + 2 * bandH, TOOTH_W,    bandH);
+    }
+    return out;
+}
+
+function buildTooth(tnum, x, isUpper) {
+    var g = svgEl('g', {
+        'class': 'tooth',
+        'data-tooth': tnum,
+        'data-x': x,
+        'data-is-upper': isUpper ? '1' : '0'
+    });
+    buildRoots(tnum, x, isUpper).forEach(function (el) { g.appendChild(el); });
+    buildCrown(tnum, x, isUpper).forEach(function (el) { g.appendChild(el); });
+    // Tooth-number label is the "whole tooth" click target.
+    var labelY = isUpper ? UP_LABEL_Y : LO_LABEL_Y;
+    var hit = svgEl('rect', {
+        'class': 'tooth-label-bg',
+        'data-tooth': tnum, 'data-surface': 'whole',
+        x: x + TOOTH_W / 2 - 14, y: labelY - 12,
+        width: 28, height: 16
+    });
+    var lbl = svgEl('text', {
+        'class': 'tooth-label',
+        'data-tooth': tnum, 'data-surface': 'whole',
+        x: x + TOOTH_W / 2, y: labelY
+    });
+    lbl.textContent = tnum;
+    g.appendChild(hit);
+    g.appendChild(lbl);
+    return g;
+}
+
+function renderRow(arr, isUpper) {
+    for (var i = 0; i < arr.length; i++) {
+        var x = ORIGIN_X + i * (TOOTH_W + GAP_X);
+        svg.appendChild(buildTooth(arr[i], x, isUpper));
+    }
+}
+
+// Build the whole chart
+while (svg.firstChild) svg.removeChild(svg.firstChild);
+renderRow(UPPER, true);
+renderRow(LOWER, false);
+// Vertical quadrant divider
+var midX = ORIGIN_X + 8 * (TOOTH_W + GAP_X) - GAP_X / 2;
+svg.appendChild(svgEl('line', {
+    'class': 'quadrant-divider',
+    x1: midX, y1: 18, x2: midX, y2: 275
+}));
+
+// ─────────────────────────────────────────────────────────────────
+// 4. Paint operations (apply examination / plan / procedure visuals)
+// ─────────────────────────────────────────────────────────────────
+// Plan + procedure markers live in dedicated <g> layers, on top of the
+// surface rects, so we can clear and redraw them without touching the
+// base examination fill.
+var planLayer = svgEl('g', { 'id': 'dchart3d-plan-layer' });
+var procLayer = svgEl('g', { 'id': 'dchart3d-proc-layer' });
+var wholeLayer = svgEl('g', { 'id': 'dchart3d-whole-layer' });
+svg.appendChild(wholeLayer);
+svg.appendChild(procLayer);
+svg.appendChild(planLayer);
+
+function clearLayer(layer) {
+    while (layer.firstChild) layer.removeChild(layer.firstChild);
+}
+
+function applySurfaceCondition(tooth, surface, condition) {
+    var el = SURFACE_ELEMENTS[tooth + '-' + surface];
+    if (!el) return;
+    var classes = (el.getAttribute('class') || '').split(/\s+/).filter(function (c) {
+        return c && c.indexOf('cond-') !== 0;
+    });
+    if (condition) classes.push('cond-' + condition);
+    el.setAttribute('class', classes.join(' '));
+}
+
+function clearAllSurfaceConditions() {
+    Object.keys(SURFACE_ELEMENTS).forEach(function (k) {
+        var el = SURFACE_ELEMENTS[k];
+        var classes = (el.getAttribute('class') || '').split(/\s+/).filter(function (c) {
+            return c && c.indexOf('cond-') !== 0;
+        });
+        el.setAttribute('class', classes.join(' '));
+    });
+}
+
+function applyWholeOverlay(tooth, condition) {
+    // Find this tooth's group and add a translucent overlay rect that
+    // covers the entire crown+roots height.
+    var toothG = svg.querySelector('g.tooth[data-tooth="' + tooth + '"]');
+    if (!toothG) return;
+    var x = parseFloat(toothG.getAttribute('data-x'));
+    var isUpper = toothG.getAttribute('data-is-upper') === '1';
+    var y = isUpper ? UP_ROOT_Y : LO_TOOTH_Y;
+    var totalH = ROOT_H + TOOTH_H;
+    var ov = svgEl('rect', {
+        'class': 'tooth-whole-overlay cond-' + condition,
+        x: x - 1, y: y - 1,
+        width: TOOTH_W + 2, height: totalH + 2,
+        rx: 4, ry: 4
+    });
+    wholeLayer.appendChild(ov);
+}
+
+function getSurfaceBounds(tooth, surface) {
+    var el = SURFACE_ELEMENTS[tooth + '-' + surface];
+    if (!el) return null;
+    if (el.tagName.toLowerCase() === 'rect') {
+        return {
+            x: parseFloat(el.getAttribute('x')),
+            y: parseFloat(el.getAttribute('y')),
+            w: parseFloat(el.getAttribute('width')),
+            h: parseFloat(el.getAttribute('height'))
+        };
+    }
+    // For root paths, use getBBox
+    try {
+        var b = el.getBBox();
+        return { x: b.x, y: b.y, w: b.width, h: b.height };
+    } catch (e) { return null; }
+}
+
+function markPlanOnSurface(tooth, surface, step) {
+    if (surface === 'whole') {
+        var toothG = svg.querySelector('g.tooth[data-tooth="' + tooth + '"]');
+        if (!toothG) return;
+        var x = parseFloat(toothG.getAttribute('data-x'));
+        var isUpper = toothG.getAttribute('data-is-upper') === '1';
+        var y = isUpper ? UP_ROOT_Y : LO_TOOTH_Y;
+        var totalH = ROOT_H + TOOTH_H;
+        var statusCls = step && step.status === 'done' ? ' plan-done'
+                      : (step && step.plan_status === 'in_progress' ? ' plan-in-progress' : '');
+        var r = svgEl('rect', {
+            'class': 'surface-plan-overlay' + statusCls,
+            x: x - 2, y: y - 2,
+            width: TOOTH_W + 4, height: totalH + 4,
+            rx: 5, ry: 5
+        });
+        planLayer.appendChild(r);
+        return;
+    }
+    var b = getSurfaceBounds(tooth, surface);
+    if (!b) return;
+    var statusCls2 = step && step.status === 'done' ? ' plan-done'
+                   : (step && step.plan_status === 'in_progress' ? ' plan-in-progress' : '');
+    planLayer.appendChild(svgEl('rect', {
+        'class': 'surface-plan-overlay' + statusCls2,
+        x: b.x + 1, y: b.y + 1, width: b.w - 2, height: b.h - 2,
+        rx: 2, ry: 2
+    }));
+}
+
+function markProcedureOnSurface(tooth, surface, procedure) {
+    if (surface === 'whole') return;
+    var b = getSurfaceBounds(tooth, surface);
+    if (!b) return;
+    procLayer.appendChild(svgEl('rect', {
+        'class': 'surface-proc-overlay proc-' + procedure,
+        x: b.x + 0.5, y: b.y + 0.5,
+        width: b.w - 1, height: b.h - 1,
+        rx: 2, ry: 2
+    }));
+}
+
+function paintAllByStatus() {
+    // Reset visuals
+    clearAllSurfaceConditions();
+    clearLayer(wholeLayer);
+    clearLayer(procLayer);
+    clearLayer(planLayer);
+    // 1. Apply examination findings
+    Object.keys(state.statuses).forEach(function (key) {
+        var s = state.statuses[key];
+        if (s.surface === 'whole') applyWholeOverlay(s.tooth, s.condition);
+        else applySurfaceCondition(s.tooth, s.surface, s.condition);
+    });
+    // 2. Apply procedure tints (overlays on top of examination color)
+    Object.keys(state.procedures).forEach(function (pid) {
+        var p = state.procedures[pid];
+        var surfs = p.all_surfaces || [p.surface];
+        surfs.forEach(function (sf) {
+            markProcedureOnSurface(p.tooth, sf, p.procedure);
+        });
+    });
+    // 3. Apply plan markers (dashed orange borders)
+    Object.keys(state.planSteps).forEach(function (id) {
+        var st = state.planSteps[id];
+        markPlanOnSurface(st.tooth, st.surface, st);
+    });
+}
+paintAllByStatus();
+
+// ─────────────────────────────────────────────────────────────────
+// 5. Click & hover delegation on the SVG
+// ─────────────────────────────────────────────────────────────────
+var viewportEl = document.getElementById('dchart3d-viewport');
+var hoverTag = document.getElementById('dchart3d-hover-tag');
+
+svg.addEventListener('click', function (e) {
+    var target = e.target;
+    if (!target || !target.getAttribute) return;
+    var tooth = target.getAttribute('data-tooth');
+    var surface = target.getAttribute('data-surface');
+    if (!tooth || !surface) return;
+    onSurfaceClick(tooth, surface);
+});
+
+svg.addEventListener('mousemove', function (e) {
+    var target = e.target;
+    if (target && target.getAttribute) {
+        var tooth = target.getAttribute('data-tooth');
+        var surface = target.getAttribute('data-surface');
+        if (tooth && surface) {
+            var rect = viewportEl.getBoundingClientRect();
+            hoverTag.style.left = (e.clientX - rect.left) + 'px';
+            hoverTag.style.top  = (e.clientY - rect.top) + 'px';
+            hoverTag.textContent = 'سن ' + tooth + ' — ' + (SURFACE_LABELS[surface] || surface);
+            hoverTag.classList.add('is-show');
+            return;
+        }
+    }
+    hoverTag.classList.remove('is-show');
+});
+svg.addEventListener('mouseleave', function () {
+    hoverTag.classList.remove('is-show');
+});
+
+// ─────────────────────────────────────────────────────────────────
+// 6. Info-panel rendering
+// ─────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+    return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderLegend() {
+    var el = document.getElementById('dchart3d-legend');
+    el.innerHTML = '';
+    (CHOICES.conditions || []).forEach(function (pair) {
+        var item = document.createElement('span');
+        item.className = 'dchart3d-legend-item';
+        item.innerHTML =
+            '<span class="dchart3d-legend-swatch" style="background:' + (CONDITION_COLORS[pair[0]] || '#fff') + '"></span>' +
+            '<span>' + pair[1] + '</span>';
+        el.appendChild(item);
+    });
+}
+
+function renderStatusList() {
+    var ul = document.getElementById('dchart3d-status-list');
+    var rows = Object.values(state.statuses).sort(function (a, b) {
+        return (a.tooth + a.surface).localeCompare(b.tooth + b.surface);
+    });
+    if (!rows.length) {
+        ul.innerHTML = '<li class="dchart3d-info-empty">لا توجد حالات بعد.</li>';
+        return;
+    }
+    ul.innerHTML = '';
+    rows.forEach(function (s) {
+        var li = document.createElement('li');
+        li.className = 'dchart3d-row';
+        li.innerHTML =
+            '<div class="dchart3d-row-main">' +
+                '<div class="dchart3d-row-title">سن ' + s.tooth + ' — ' + (SURFACE_LABELS[s.surface] || s.surface) + '</div>' +
+                '<div class="dchart3d-row-sub">' +
+                    '<span class="dchart3d-legend-swatch" style="background:' + (CONDITION_COLORS[s.condition] || '#fff') + ';display:inline-block;vertical-align:middle;margin-left:6px;"></span>' +
+                    escapeHtml(s.condition_label) +
+                    (s.note ? ' • ' + escapeHtml(s.note) : '') +
+                '</div>' +
+            '</div>' +
+            '<div class="dchart3d-row-actions">' +
+                '<button type="button" class="dchart3d-btn" data-act="exam-edit" data-tooth="' + s.tooth + '" data-surface="' + s.surface + '">تعديل</button>' +
+                '<button type="button" class="dchart3d-btn" data-act="exam-toplan" data-tooth="' + s.tooth + '" data-surface="' + s.surface + '" data-condition="' + s.condition + '">إلى الخطة</button>' +
+                '<button type="button" class="dchart3d-btn is-danger" data-act="exam-clear" data-tooth="' + s.tooth + '" data-surface="' + s.surface + '">حذف</button>' +
+            '</div>';
+        ul.appendChild(li);
+    });
+}
+
+function renderPlanList() {
+    // "Active plans" — pending steps only. Completed (done) steps are shown
+    // in a separate "Completed steps" list below so the active list stays
+    // focused on what still needs to happen.
+    var ulActive = document.getElementById('dchart3d-plan-list');
+    var ulDone   = document.getElementById('dchart3d-plan-done-list');
+    var all = Object.values(state.planSteps);
+    var pending  = all.filter(function (s) { return s.status !== 'done'; });
+    var doneList = all.filter(function (s) { return s.status === 'done'; });
+
+    var byPriority = { urgent: 0, necessary: 1, optional: 2 };
+    function sortRows(arr) {
+        arr.sort(function (a, b) {
+            return (byPriority[a.priority] - byPriority[b.priority]) || a.tooth.localeCompare(b.tooth);
+        });
+    }
+    sortRows(pending); sortRows(doneList);
+
+    // Active rows — full controls (edit + delete)
+    if (!pending.length) {
+        ulActive.innerHTML = '<li class="dchart3d-info-empty">لا توجد خطط نشطة.</li>';
+    } else {
+        ulActive.innerHTML = '';
+        pending.forEach(function (st) {
+            var li = document.createElement('li');
+            li.className = 'dchart3d-row';
+            var prTag = '<span class="dchart3d-tag is-' + st.priority + '">' + (PRIORITY_LABELS[st.priority] || st.priority) + '</span>';
+            var stTag;
+            if (st.plan_status === 'in_progress') stTag = '<span class="dchart3d-tag is-progress">قيد التنفيذ</span>';
+            else stTag = '<span class="dchart3d-tag is-pending">قيد الانتظار</span>';
+            li.innerHTML =
+                '<div class="dchart3d-row-main">' +
+                    '<div class="dchart3d-row-title">' +
+                        escapeHtml(st.procedure_label) + ' — سن ' + st.tooth + ' / ' + (SURFACE_LABELS[st.surface] || st.surface) +
+                        prTag + stTag +
+                    '</div>' +
+                    '<div class="dchart3d-row-sub">' +
+                        (st.canals ? '<span class="dchart3d-tag">قنوات: ' + escapeHtml(st.canals) + '</span>' : '') +
+                        (st.notes ? ' • ' + escapeHtml(st.notes) : '') +
+                    '</div>' +
+                '</div>' +
+                '<div class="dchart3d-row-actions">' +
+                    '<button type="button" class="dchart3d-btn" data-act="plan-edit" data-step="' + st.id + '">تعديل</button>' +
+                    '<button type="button" class="dchart3d-btn is-danger" data-act="plan-delete" data-step="' + st.id + '">حذف</button>' +
+                '</div>';
+            ulActive.appendChild(li);
+        });
+    }
+
+    // Completed rows — read-only summary (no edit button; delete still
+    // available in case the dentist wants to remove a mistaken step).
+    if (!doneList.length) {
+        ulDone.innerHTML = '<li class="dchart3d-info-empty">لا توجد خطوات منجزة.</li>';
+    } else {
+        ulDone.innerHTML = '';
+        doneList.forEach(function (st) {
+            var li = document.createElement('li');
+            li.className = 'dchart3d-row';
+            var prTag = '<span class="dchart3d-tag is-' + st.priority + '">' + (PRIORITY_LABELS[st.priority] || st.priority) + '</span>';
+            var stTag = '<span class="dchart3d-tag is-done">تم</span>';
+            li.innerHTML =
+                '<div class="dchart3d-row-main">' +
+                    '<div class="dchart3d-row-title">' +
+                        escapeHtml(st.procedure_label) + ' — سن ' + st.tooth + ' / ' + (SURFACE_LABELS[st.surface] || st.surface) +
+                        prTag + stTag +
+                    '</div>' +
+                    '<div class="dchart3d-row-sub">' +
+                        (st.canals ? '<span class="dchart3d-tag">قنوات: ' + escapeHtml(st.canals) + '</span>' : '') +
+                        (st.notes ? ' • ' + escapeHtml(st.notes) : '') +
+                    '</div>' +
+                '</div>' +
+                '<div class="dchart3d-row-actions">' +
+                    '<button type="button" class="dchart3d-btn is-danger" data-act="plan-delete" data-step="' + st.id + '">حذف</button>' +
+                '</div>';
+            ulDone.appendChild(li);
+        });
+    }
+}
+
+function renderCompareWidget() {
+    var box = document.getElementById('dchart3d-compare');
+    if (!VISIT_ID) {
+        box.innerHTML = '<div class="dchart3d-info-empty">لا توجد زيارة مفتوحة.</div>';
+        return;
+    }
+    var plannedIds = state.snapshot;
+    var planned = plannedIds.size;
+    var completed = 0;
+    plannedIds.forEach(function (sid) {
+        var st = state.planSteps[sid];
+        if (st && st.status === 'done') completed += 1;
+    });
+    var remaining = Math.max(planned - completed, 0);
+    box.innerHTML =
+        '<div class="dchart3d-compare-cell"><div class="lbl">مخطط لهذا اليوم</div><div class="val">' + planned + '</div></div>' +
+        '<div class="dchart3d-compare-cell"><div class="lbl">تم إنجازه</div><div class="val">' + completed + '</div></div>' +
+        '<div class="dchart3d-compare-cell is-remaining"><div class="lbl">المتبقي</div><div class="val">' + remaining + '</div></div>';
+}
+
+function renderProcedureList() {
+    var ul = document.getElementById('dchart3d-proc-list');
+    var rows = Object.values(state.procedures);
+    if (!rows.length) {
+        ul.innerHTML = '<li class="dchart3d-info-empty">لا توجد إجراءات في هذه الزيارة.</li>';
+    } else {
+        rows.sort(function (a, b) { return (b.created_at || '').localeCompare(a.created_at || ''); });
+        ul.innerHTML = '';
+        rows.forEach(function (p) {
+            var li = document.createElement('li');
+            li.className = 'dchart3d-row';
+            var surfacesText = (p.all_surfaces || [p.surface]).map(function (s) { return SURFACE_LABELS[s] || s; }).join(' + ');
+            li.innerHTML =
+                '<div class="dchart3d-row-main">' +
+                    '<div class="dchart3d-row-title">' +
+                        escapeHtml(p.procedure_label) + ' — سن ' + p.tooth + ' / ' + escapeHtml(surfacesText) +
+                        (p.plan_step_id ? '<span class="dchart3d-tag is-progress">من الخطة</span>' : '') +
+                    '</div>' +
+                    '<div class="dchart3d-row-sub">' +
+                        (p.material ? 'المادة: ' + escapeHtml(p.material) : '') +
+                        (p.canals ? ' • قنوات: ' + escapeHtml(p.canals) : '') +
+                        (p.notes ? ' • ' + escapeHtml(p.notes) : '') +
+                    '</div>' +
+                '</div>' +
+                '<div class="dchart3d-row-actions">' +
+                    '<button type="button" class="dchart3d-btn is-danger" data-act="proc-delete" data-proc="' + p.id + '">حذف</button>' +
+                '</div>';
+            ul.appendChild(li);
+        });
+    }
+    renderCompareWidget();
+    renderHistoryList();
+}
+
+function renderHistoryList() {
+    var ul = document.getElementById('dchart3d-history-list');
+    var rows = state.history || [];
+    if (!rows.length) {
+        ul.innerHTML = '<li class="dchart3d-info-empty">لا توجد إجراءات سابقة.</li>';
+        return;
+    }
+    ul.innerHTML = '';
+    rows.slice(0, 30).forEach(function (p) {
+        var li = document.createElement('li');
+        li.className = 'dchart3d-row';
+        var date = p.visit_date ? p.visit_date.slice(0, 10) : '';
+        li.innerHTML =
+            '<div class="dchart3d-row-main">' +
+                '<div class="dchart3d-row-title">' +
+                    escapeHtml(p.procedure_label) + ' — سن ' + p.tooth + ' / ' + (SURFACE_LABELS[p.surface] || p.surface) +
+                '</div>' +
+                '<div class="dchart3d-row-sub">' + escapeHtml(date) + (p.notes ? ' • ' + escapeHtml(p.notes) : '') + '</div>' +
+            '</div>';
+        ul.appendChild(li);
+    });
+}
+
+function rerenderAll() {
+    renderLegend();
+    renderStatusList();
+    renderPlanList();
+    renderProcedureList();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 7. Mode switching
+// ─────────────────────────────────────────────────────────────────
+var modeHint = document.getElementById('dchart3d-mode-hint');
+var infoEl   = document.getElementById('dchart3d-info');
+
+function setMode(m) {
+    state.mode = m;
+    document.querySelectorAll('.dchart3d-mode').forEach(function (b) {
+        b.classList.toggle('is-active', b.getAttribute('data-mode') === m);
+    });
+    infoEl.setAttribute('data-mode', m);
+    if (m === 'examination') modeHint.textContent = 'وضع المعاينة';
+    else if (m === 'plan')   modeHint.textContent = 'وضع الخطة';
+    else                     modeHint.textContent = 'وضع الإجراءات';
+}
+document.querySelectorAll('.dchart3d-mode').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        if (btn.hasAttribute('disabled')) return;
+        setMode(btn.getAttribute('data-mode'));
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// 8. Dialog (picker)
+// ─────────────────────────────────────────────────────────────────
+var overlay    = document.getElementById('dchart3d-overlay');
+var dlgTitle   = document.getElementById('dchart3d-dialog-title');
+var dlgSub     = document.getElementById('dchart3d-dialog-sub');
+var dlgSummary = document.getElementById('dchart3d-selected-summary');
+var btnSave    = document.getElementById('dchart3d-save');
+var btnClear   = document.getElementById('dchart3d-clear');
+var btnCancel  = document.getElementById('dchart3d-cancel');
+
+var examGrid   = document.getElementById('dchart3d-exam-grid');
+var examNote   = document.getElementById('dchart3d-exam-note');
+var planProc   = document.getElementById('dchart3d-plan-procedure');
+var planPrio   = document.getElementById('dchart3d-plan-priority');
+var planCanals = document.getElementById('dchart3d-plan-canals');
+var planNotes  = document.getElementById('dchart3d-plan-notes');
+var procProc   = document.getElementById('dchart3d-proc-procedure');
+var procMat    = document.getElementById('dchart3d-proc-material');
+var procCanals = document.getElementById('dchart3d-proc-canals');
+var procNotes  = document.getElementById('dchart3d-proc-notes');
+var procLink   = document.getElementById('dchart3d-proc-link');
+var procExtras = document.getElementById('dchart3d-proc-extras');
+var procCanalsRow = document.getElementById('dchart3d-proc-canals-row');
+var procLinkRow   = document.getElementById('dchart3d-proc-link-row');
+var procExtraRow  = document.getElementById('dchart3d-proc-extra-row');
+var planCanalsRow = document.getElementById('dchart3d-plan-canals-row');
+
+function fillSelect(selectEl, pairs, current) {
+    selectEl.innerHTML = '';
+    (pairs || []).forEach(function (pair) {
+        var opt = document.createElement('option');
+        opt.value = pair[0];
+        opt.textContent = pair[1];
+        if (current === pair[0]) opt.selected = true;
+        selectEl.appendChild(opt);
+    });
+}
+fillSelect(planProc, CHOICES.procedures);
+fillSelect(planPrio, CHOICES.priorities, 'necessary');
+fillSelect(procProc, CHOICES.procedures);
+
+function buildExamGrid(currentCode) {
+    examGrid.innerHTML = '';
+    (CHOICES.conditions || []).forEach(function (pair) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'dchart3d-cond-btn' + (pair[0] === currentCode ? ' is-selected' : '');
+        b.dataset.code = pair[0];
+        b.innerHTML =
+            '<span class="dchart3d-cond-dot" style="background:' + (CONDITION_COLORS[pair[0]] || '#fff') + '"></span>' +
+            '<span>' + pair[1] + '</span>';
+        b.addEventListener('click', function () {
+            examGrid.querySelectorAll('.dchart3d-cond-btn').forEach(function (x) {
+                x.classList.toggle('is-selected', x.dataset.code === pair[0]);
+            });
+            state.selection.examCondition = pair[0];
+        });
+        examGrid.appendChild(b);
+    });
+}
+
+function buildProcExtras(tooth, primary) {
+    procExtras.innerHTML = '';
+    state.extraSurfaces.clear();
+    ['O','M','D','B','L'].forEach(function (s) {
+        if (s === primary) return;
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'dchart3d-cond-btn';
+        b.dataset.code = s;
+        b.innerHTML = '<span>' + (SURFACE_LABELS[s] || s) + '</span>';
+        b.addEventListener('click', function () {
+            if (state.extraSurfaces.has(s)) { state.extraSurfaces.delete(s); b.classList.remove('is-selected'); }
+            else { state.extraSurfaces.add(s); b.classList.add('is-selected'); }
+        });
+        procExtras.appendChild(b);
+    });
+}
+
+function openDialog(tooth, surface, opts) {
+    opts = opts || {};
+    state.selection = {
+        tooth: tooth,
+        surface: surface,
+        mode: opts.mode || state.mode,
+        stepId: opts.stepId || null,
+        prefill: opts.prefill || null
+    };
+    state.extraSurfaces.clear();
+    dlgTitle.textContent = 'سن ' + tooth + ' — ' + (SURFACE_LABELS[surface] || surface);
+    dlgSub.textContent = '';
+    dlgSummary.innerHTML = 'الوضع: <b>' + (
+        state.selection.mode === 'examination' ? 'معاينة' :
+        state.selection.mode === 'plan' ? 'خطة العلاج' : 'تسجيل إجراء'
+    ) + '</b>';
+    document.getElementById('dchart3d-form-exam').style.display = (state.selection.mode === 'examination') ? '' : 'none';
+    document.getElementById('dchart3d-form-plan').style.display = (state.selection.mode === 'plan') ? '' : 'none';
+    document.getElementById('dchart3d-form-proc').style.display = (state.selection.mode === 'procedures') ? '' : 'none';
+    btnClear.style.display = 'none';
+
+    if (state.selection.mode === 'examination') {
+        var existing = state.statuses[tooth + '-' + surface] || {};
+        state.selection.examCondition = existing.condition || '';
+        buildExamGrid(state.selection.examCondition);
+        examNote.value = existing.note || '';
+        if (existing.condition) btnClear.style.display = '';
+        if (opts.prefill && opts.prefill.condition) {
+            state.selection.examCondition = opts.prefill.condition;
+            buildExamGrid(opts.prefill.condition);
+        }
+    } else if (state.selection.mode === 'plan') {
+        var fromExam = state.statuses[tooth + '-' + surface];
+        var suggested = '';
+        if (fromExam) {
+            if (fromExam.condition === 'caries') suggested = 'filling_composite';
+            else if (fromExam.condition === 'fracture') suggested = 'crown';
+        }
+        if (opts.prefill && opts.prefill.procedure) suggested = opts.prefill.procedure;
+        fillSelect(planProc, CHOICES.procedures, suggested);
+        fillSelect(planPrio, CHOICES.priorities, 'necessary');
+        planNotes.value = '';
+        planCanals.value = '';
+        planCanalsRow.style.display = (suggested === 'rct') ? '' : 'none';
+        if (opts.stepId && state.planSteps[opts.stepId]) {
+            var st = state.planSteps[opts.stepId];
+            fillSelect(planProc, CHOICES.procedures, st.procedure);
+            fillSelect(planPrio, CHOICES.priorities, st.priority);
+            planNotes.value = st.notes || '';
+            planCanals.value = st.canals || '';
+            planCanalsRow.style.display = (st.procedure === 'rct') ? '' : 'none';
+            dlgSub.textContent = 'تعديل خطوة موجودة في الخطة.';
+        }
+    } else if (state.selection.mode === 'procedures') {
+        if (!VISIT_ID) { alert('افتح زيارة أولاً.'); state.selection = null; return; }
+        var matching = Object.values(state.planSteps).filter(function (s) {
+            return s.tooth === tooth && s.surface === surface && s.status === 'pending';
+        });
+        var presetProc = matching.length ? matching[0].procedure : '';
+        fillSelect(procProc, CHOICES.procedures, presetProc);
+        procMat.value = '';
+        procCanals.value = '';
+        procNotes.value = '';
+        procCanalsRow.style.display = (presetProc === 'rct') ? '' : 'none';
+        procLink.innerHTML = '<option value="">— بدون ربط —</option>';
+        var sameTooth = Object.values(state.planSteps).filter(function (s) {
+            return s.tooth === tooth && s.status === 'pending';
+        });
+        sameTooth.forEach(function (s) {
+            var o = document.createElement('option');
+            o.value = s.id;
+            o.textContent = (s.procedure_label || s.procedure) + ' — ' + (SURFACE_LABELS[s.surface] || s.surface);
+            procLink.appendChild(o);
+        });
+        if (matching.length) procLink.value = matching[0].id;
+        procLinkRow.style.display = sameTooth.length ? '' : 'none';
+        procExtraRow.style.display = ['O','M','D','B','L'].indexOf(surface) >= 0 ? '' : 'none';
+        if (procExtraRow.style.display !== 'none') buildProcExtras(tooth, surface);
+    }
+    overlay.classList.add('is-show');
+}
+
+function closeDialog() {
+    overlay.classList.remove('is-show');
+    state.selection = null;
+}
+
+overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) closeDialog();
+});
+btnCancel.addEventListener('click', closeDialog);
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && overlay.classList.contains('is-show')) closeDialog();
+});
+planProc.addEventListener('change', function () {
+    planCanalsRow.style.display = planProc.value === 'rct' ? '' : 'none';
+});
+procProc.addEventListener('change', function () {
+    procCanalsRow.style.display = procProc.value === 'rct' ? '' : 'none';
+});
+
+// ─────────────────────────────────────────────────────────────────
+// 9. Save / Clear / Action handlers
+// ─────────────────────────────────────────────────────────────────
+btnSave.addEventListener('click', function () {
+    if (!state.selection) return;
+    btnSave.disabled = true;
+    var sel = state.selection;
+    var done = function (res) {
+        btnSave.disabled = false;
+        if (!res || !res.ok) {
+            alert('تعذر الحفظ. ' + (res && res.status ? '(HTTP ' + res.status + ')' : ''));
+            return;
+        }
+        if (sel.mode === 'examination') {
+            if (res.cleared) delete state.statuses[sel.tooth + '-' + sel.surface];
+            else state.statuses[sel.tooth + '-' + sel.surface] = res.status;
+        } else if (sel.mode === 'plan') {
+            if (res.step) state.planSteps[res.step.id] = res.step;
+        } else if (sel.mode === 'procedures') {
+            if (res.procedure) {
+                state.procedures[res.procedure.id] = res.procedure;
+                if (res.procedure.plan_step_id && state.planSteps[res.procedure.plan_step_id]) {
+                    state.planSteps[res.procedure.plan_step_id].status = 'done';
+                }
+            }
+        }
+        paintAllByStatus();
+        rerenderAll();
+        closeDialog();
+    };
+    if (sel.mode === 'examination') {
+        api(URLS.status, {
+            tooth: sel.tooth, surface: sel.surface,
+            condition: sel.examCondition || '',
+            note: examNote.value.trim(),
+            visit_id: VISIT_ID
+        }).then(done);
+    } else if (sel.mode === 'plan') {
+        if (sel.stepId) {
+            api(URLS.plan_update_tpl.replace('__ID__', sel.stepId), {
+                procedure: planProc.value,
+                priority: planPrio.value,
+                notes: planNotes.value.trim(),
+                canals: planCanals.value.trim()
+            }).then(function (res) {
+                if (res && res.ok && res.step) state.planSteps[res.step.id] = res.step;
+                done(res && res.ok ? { ok: true } : res);
+            });
+        } else {
+            api(URLS.plan_create, {
+                tooth: sel.tooth, surface: sel.surface,
+                procedure: planProc.value,
+                priority: planPrio.value,
+                notes: planNotes.value.trim(),
+                canals: planCanals.value.trim()
+            }).then(done);
+        }
+    } else if (sel.mode === 'procedures') {
+        if (!URLS.proc_create) { alert('لا توجد زيارة مفتوحة.'); btnSave.disabled = false; return; }
+        var extra = Array.from(state.extraSurfaces);
+        var link = procLink.value || null;
+        api(URLS.proc_create, {
+            tooth: sel.tooth, surface: sel.surface,
+            procedure: procProc.value,
+            material: procMat.value.trim(),
+            canals: procCanals.value.trim(),
+            notes: procNotes.value.trim(),
+            plan_step_id: link ? parseInt(link, 10) : null,
+            extra_surfaces: extra
+        }).then(done);
+    }
+});
+
+btnClear.addEventListener('click', function () {
+    if (!state.selection || state.selection.mode !== 'examination') return;
+    var sel = state.selection;
+    btnClear.disabled = true;
+    api(URLS.status, {
+        tooth: sel.tooth, surface: sel.surface,
+        condition: '', note: '', visit_id: VISIT_ID
+    }).then(function (res) {
+        btnClear.disabled = false;
+        if (res && res.ok) {
+            delete state.statuses[sel.tooth + '-' + sel.surface];
+            paintAllByStatus();
+            rerenderAll();
+            closeDialog();
+        } else {
+            alert('تعذر المسح.');
+        }
+    });
+});
+
+function onSurfaceClick(tooth, surface) {
+    if (!tooth) return;
+    openDialog(tooth, surface);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// 10. Info-panel action delegation (Edit / Delete / Add to Plan)
+// ─────────────────────────────────────────────────────────────────
+infoEl.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+    if (act === 'exam-edit') {
+        setMode('examination');
+        openDialog(btn.getAttribute('data-tooth'), btn.getAttribute('data-surface'));
+    } else if (act === 'exam-clear') {
+        if (!confirm('حذف هذه الحالة من المعاينة؟')) return;
+        api(URLS.status, {
+            tooth: btn.getAttribute('data-tooth'),
+            surface: btn.getAttribute('data-surface'),
+            condition: ''
+        }).then(function (res) {
+            if (res && res.ok) {
+                delete state.statuses[btn.getAttribute('data-tooth') + '-' + btn.getAttribute('data-surface')];
+                paintAllByStatus(); rerenderAll();
+            }
+        });
+    } else if (act === 'exam-toplan') {
+        setMode('plan');
+        var cond = btn.getAttribute('data-condition');
+        var prefill = {};
+        if (cond === 'caries') prefill.procedure = 'filling_composite';
+        else if (cond === 'fracture') prefill.procedure = 'crown';
+        else if (cond === 'existing_rct') prefill.procedure = 'crown';
+        openDialog(btn.getAttribute('data-tooth'), btn.getAttribute('data-surface'), { mode: 'plan', prefill: prefill });
+    } else if (act === 'plan-edit') {
+        var id = btn.getAttribute('data-step');
+        var step = state.planSteps[id];
+        if (!step) return;
+        setMode('plan');
+        openDialog(step.tooth, step.surface, { mode: 'plan', stepId: parseInt(id, 10) });
+    } else if (act === 'plan-delete') {
+        var pid = btn.getAttribute('data-step');
+        if (!confirm('حذف خطوة الخطة؟')) return;
+        api(URLS.plan_delete_tpl.replace('__ID__', pid), {}).then(function (res) {
+            if (res && res.ok) {
+                delete state.planSteps[pid];
+                paintAllByStatus(); rerenderAll();
+            }
+        });
+    } else if (act === 'proc-delete') {
+        var pid2 = btn.getAttribute('data-proc');
+        if (!URLS.proc_delete_tpl) return;
+        if (!confirm('حذف هذا الإجراء؟')) return;
+        api(URLS.proc_delete_tpl.replace('__ID__', pid2), {}).then(function (res) {
+            if (res && res.ok) {
+                var p = state.procedures[pid2];
+                if (p && p.plan_step_id && state.planSteps[p.plan_step_id]) {
+                    state.planSteps[p.plan_step_id].status = 'pending';
+                }
+                delete state.procedures[pid2];
+                paintAllByStatus(); rerenderAll();
+            }
+        });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// 11. First render
+// ─────────────────────────────────────────────────────────────────
+rerenderAll();
+setMode('examination');
+
+})();
+</script>

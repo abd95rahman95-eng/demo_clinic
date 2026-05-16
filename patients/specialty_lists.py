@@ -631,14 +631,20 @@ SPECIALTY_NURSING_FIELDS = {
 # Specialty-specific medical fields (rendered between clinical_examination and
 # the common medical block). Empty list = no specialty-specific fields.
 SPECIALTY_MEDICAL_FIELDS = {
-    'general_practice': ['imaging_requests', 'imaging_results', 'lab_requests', 'lab_results'],
-    'cardiology':       ['lab_requests', 'lab_results', 'ecg_results', 'ejection_fraction', 'cardiac_history',
-                         'chest_pain_type', 'cardiac_medications', 'imaging_requests', 'imaging_results'],
-    'neurology':        ['lab_requests', 'lab_results', 'imaging_requests', 'imaging_results',],
-    'dermatology':      ['lab_requests', 'lab_results', 'imaging_requests', 'imaging_results',],
-    'orthopedics':      ['lab_requests', 'lab_results', 'pain_location', 'pain_scale', 'injury_history',
-                         'range_of_motion', 'xray_findings', 'imaging_requests', 'imaging_results'],
-    'gynecology':       ['lab_requests', 'lab_results', 'last_menstrual_period', 'cycle_regularity',
+    # lab_requests / lab_results are moved into COMMON_MEDICAL_FIELDS (just
+    # before diagnosis) so they appear in the same place for every specialty.
+    # For specialties that have a specialty-specific imaging field
+    # (e.g. orthopedics → xray_findings, cardiology → ecg_results,
+    # neurology → CT_MRI_findings), the generic imaging_results is dropped
+    # in favour of the specialty-specific one.
+    'general_practice': ['imaging_requests', 'imaging_results'],
+    'cardiology':       ['ecg_results', 'ejection_fraction', 'cardiac_history',
+                         'chest_pain_type', 'cardiac_medications', 'imaging_requests'],
+    'neurology':        ['CT_MRI_findings', 'neurological_examination', 'imaging_requests'],
+    'dermatology':      ['skin_examination', 'imaging_requests', 'imaging_results'],
+    'orthopedics':      ['pain_location', 'pain_scale', 'injury_history',
+                         'range_of_motion', 'xray_findings', 'imaging_requests'],
+    'gynecology':       ['last_menstrual_period', 'cycle_regularity',
                          'contraception_method', 'obstetric_history',
                          'gestational_age_weeks', 'fundal_height',
                          'abdominal_circumference', 'fetal_heart_rate',
@@ -653,11 +659,12 @@ SPECIALTY_MEDICAL_FIELDS = {
 # in the template) and `prescription` is the free-text notes box below it.
 COMMON_MEDICAL_FIELDS = [
     'doctor_notes',
+    'lab_requests',
+    'lab_results',
     'diagnosis',
     'treatment_plan',
     'patient_instructions',
     'prescription_items',
-    'prescription',
     'follow_up_date',
 ]
 

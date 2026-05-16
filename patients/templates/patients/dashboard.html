@@ -35,6 +35,13 @@
 }
 @media (max-width: 520px) {
     .top-action-grid { grid-template-columns: 1fr; }
+    /* Mobile order: add-patient, patients, pending, consultations, book appt, calendar */
+    .top-action-grid > :nth-child(1) { order: 1; } /* Add patient   */
+    .top-action-grid > :nth-child(4) { order: 2; } /* Patients      */
+    .top-action-grid > :nth-child(2) { order: 3; } /* Pending       */
+    .top-action-grid > :nth-child(5) { order: 4; } /* Consultations */
+    .top-action-grid > :nth-child(3) { order: 5; } /* Book appt     */
+    .top-action-grid > :nth-child(6) { order: 6; } /* Calendar      */
 }
 .action-card-mini {
     padding: 18px 18px;
@@ -94,7 +101,7 @@
     </a>
 
     {# 5. Consultation visits — half-completed, awaiting referral #}
-    <a href="{% url 'patient_list' %}?filter=consultation" class="action-card-link">
+    <a href="{% url 'doctor_consultation_visits' %}" class="action-card-link">
         <div class="action-card action-card-mini" style="background: linear-gradient(135deg, #fef3c7, #fde68a); color:#7c2d12;">
             <div class="action-card-title"><i class="fa-solid fa-user-doctor"></i> زيارات الاستشارة {% if consultation_visits_count %}<span class="badge-count">{{ consultation_visits_count }}</span>{% endif %}</div>
             <div class="action-card-subtitle">قيد الانتظار (مختصّ / فحوصات)</div>

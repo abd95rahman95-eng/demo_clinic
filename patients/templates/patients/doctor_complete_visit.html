@@ -25,13 +25,8 @@
             </div>
             {% endif %}
 
-            {% comment %}
-               ─── NURSE DATA — READ-ONLY ──────────────────────────────────────
-               The doctor sees what the nurse entered. To change anything here,
-               click "تعديل البيانات التمريضية" — that opens nurse_edit_visit
-               (same page the nurse uses), saves, then returns to this page.
-               ───────────────────────────────────────────────────────────────
-            {% endcomment %}
+            {% if specialty != 'dentistry' %}
+            
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 18px; gap: 12px; flex-wrap: wrap;">
                 <div class="ui-sub-title nursing-title" style="margin:0;"><i class="fa-solid fa-user-nurse"></i> القسم التمريضي (للقراءة فقط)</div>
                 <a href="{% url 'nurse_edit_visit' visit.id %}?next=complete"
@@ -71,12 +66,15 @@
                     {% endwith %}
                 {% endfor %}
             </div>
-
-            {% if specialty == 'dentistry' %}
-            {% include 'patients/_dental_chart.html' %}
             {% endif %}
 
+            {% if specialty == 'dentistry' %}
+            {% include 'patients/_dental_chart_3d.html' %}
+            {% endif %}
+
+            {% if specialty != 'dentistry' %}
             <div class="section-title" style="margin-top: 26px;">القسم الطبي وملاحظات الطبيب</div>
+            {% endif %}
             <div class="form-grid-layout">
                 {% comment %}
                    ─── DOCTOR-EDITABLE FIELDS ─────────────────────────────────

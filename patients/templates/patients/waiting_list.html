@@ -55,6 +55,7 @@
         <div class="card-actions">
             <a href="{% url 'patient_detail' item.visit.patient.id %}" class="btn-action-primary">فتح الملف</a>
             <a href="{% url 'nurse_edit_visit' item.visit.id %}" class="btn-action-outline">تعديل</a>
+            <a href="{% url 'delete_visit' item.visit.id %}" class="btn-action-outline" style="background:#fef2f2; color:#b91c1c; border-color:#fecaca;"><i class="fa-solid fa-trash"></i> حذف</a>
         </div>
     </div>
     {% endfor %}

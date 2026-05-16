@@ -38,7 +38,9 @@
         .navbar {
             background: linear-gradient(135deg, #1a6b3c, #2e8b57);
             color: white;
-            padding: 15px 25px;
+            /* iOS safe-area aware top padding so the navbar (and the burger
+               button) clear the iPhone status bar (battery / notifications). */
+            padding: calc(15px + env(safe-area-inset-top, 0px)) 25px 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;

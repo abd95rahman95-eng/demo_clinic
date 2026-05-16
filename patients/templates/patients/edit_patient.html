@@ -4,6 +4,25 @@
 
 {% block content %}
 
+<style>
+.patient-quadgrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    align-items: end;
+}
+.patient-quadgrid label { margin-bottom: 4px; }
+.patient-quadgrid select, .patient-quadgrid input {
+    width: 100%;
+    box-sizing: border-box;
+}
+@media (max-width: 720px) {
+    .patient-quadgrid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 380px) {
+    .patient-quadgrid { grid-template-columns: 1fr; }
+}
+</style>
 
 <div class="patient-view-wrapper">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
@@ -35,29 +54,27 @@
                     <small style="color:#5a8a6a; font-size:12px;">يجب أن يحتوي على 10 أرقام بالضبط.</small>
                 </div>
 
-                <div class="form-group">
-                    <label>{{ form.gender.label }}</label>
-                    {{ form.gender }}
-                </div>
-
                 <div class="form-group full-width">
-                    <label><i class="fa-solid fa-cake-candles"></i> تاريخ الميلاد <small style="color:#7a8a9a; font-weight:400;">(يحدّث العمر تلقائياً)</small></label>
-                    <div style="display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap:8px;">
+                    <div class="patient-quadgrid">
                         <div>
-                            <small style="color:#5a8a6a;">السنة</small>
+                            <label>{{ form.gender.label }}</label>
+                            {{ form.gender }}
+                        </div>
+                        <div>
+                            <label><i class="fa-solid fa-cake-candles"></i> السنة</label>
                             {{ form.birth_year }}
                         </div>
                         <div>
-                            <small style="color:#5a8a6a;">الشهر (اختياري)</small>
+                            <label>الشهر</label>
                             {{ form.birth_month }}
                         </div>
                         <div>
-                            <small style="color:#5a8a6a;">اليوم (اختياري)</small>
+                            <label>اليوم</label>
                             {{ form.birth_day }}
                         </div>
                     </div>
                     {% if patient.age_years %}
-                    <small style="color:#5a8a6a;">العمر الحالي: <strong>{{ patient.age_years }}</strong> سنة.</small>
+                    <small style="color:#5a8a6a; display:block; margin-top:6px;">العمر الحالي: <strong>{{ patient.age_years }}</strong> سنة.</small>
                     {% endif %}
                 </div>
 

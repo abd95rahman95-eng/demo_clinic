@@ -1,0 +1,97 @@
+{% extends 'patients/base.html' %}
+
+{% block title %}زيارات الاستشارة{% endblock %}
+
+{% block content %}
+
+<style>
+/* Match the pending-visits look; consultations get an amber accent. */
+.pending-card-modern.consultation-card {
+    border: 2px solid #f59e0b !important;
+    position: relative;
+}
+.pending-card-modern.consultation-card::before {
+    content: "🩺 استشارة";
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: #f59e0b;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+}
+.days-since-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #fef3c7;
+    color: #7c2d12;
+    font-size: 12px;
+    font-weight: 700;
+}
+.days-since-pill.is-stale { background: #fecaca; color: #7f1d1d; }
+</style>
+
+<div class="pending-list-header">
+    <h1 class="pending-list-title">زيارات الاستشارة</h1>
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="message-box
+            {% if message.tags == 'success' %}message-success{% endif %}
+            {% if message.tags == 'error' %}message-error{% endif %}
+            {% if message.tags == 'warning' %}message-warning{% endif %}">
+            {{ message }}
+        </div>
+    {% endfor %}
+{% endif %}
+
+{% if rows %}
+    <div class="pending-grid">
+        {% for row in rows %}
+            <div class="pending-card-modern consultation-card">
+
+                <div class="patient-name">
+                    {{ row.visit.patient.name }}
+                </div>
+
+                <div class="card-body">
+                    <div class="info-row">
+                        <strong>رقم الملف:</strong> <span>{{ row.visit.patient.file_number }}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <strong>الهاتف:</strong> <span>{{ row.visit.patient.phone|default:"—" }}</span>
+                    </div>
+
+                    <div class="info-row">
+                        <strong>منذ:</strong>
+                        <span class="days-since-pill {% if row.days_since >= 7 %}is-stale{% endif %}">
+                            {% if row.days_since == 0 %}اليوم{% elif row.days_since == 1 %}منذ يوم{% else %}منذ {{ row.days_since }} يوم{% endif %}
+                        </span>
+                    </div>
+
+                    <div class="info-row" style="flex-direction: column; align-items: stretch;">
+                        <strong>ملاحظات الطبيب:</strong>
+                        <span style="display:block; white-space: pre-wrap; margin-top: 4px;">{{ row.visit.doctor_notes|default:"—" }}</span>
+                    </div>
+                </div>
+
+                <div class="card-actions">
+                    <a href="{% url 'edit_visit' row.visit.id %}" class="btn-action-primary">إكمال المعاينة</a>
+                    <a href="{% url 'patient_detail' row.visit.patient.id %}" class="btn-action-outline">ملف المريض</a>
+                </div>
+
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="empty-state">
+        <div style="font-weight: bold; color: #1e293b; margin-bottom: 8px;">لا توجد زيارات استشارة قيد الانتظار</div>
+    </div>
+{% endif %}
+
+{% endblock %}

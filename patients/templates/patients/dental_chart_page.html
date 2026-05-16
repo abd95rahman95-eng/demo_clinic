@@ -1,0 +1,29 @@
+{% extends 'patients/base.html' %}
+{% load static %}
+
+{% block title %}المخطط السني — {{ patient.name }}{% endblock %}
+
+{% block content %}
+<div class="patient-view-wrapper">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+        <div>
+            <h1 style="margin: 0; font-size: 26px; color: #1e293b; font-weight: 800;">
+                <i class="fa-solid fa-tooth"></i> المخطط السني: {{ patient.name }}
+            </h1>
+            <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">
+                رقم الملف: {{ patient.file_number }}
+            </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <a href="{% url 'patient_detail' patient.id %}" class="btn-action btn-edit" style="text-decoration: none;">
+                <i class="fa-solid fa-arrow-right"></i> عودة لملف المريض
+            </a>
+        </div>
+    </div>
+
+    {# CSRF token for the AJAX endpoints used inside the partial #}
+    {% csrf_token %}
+
+    {% include 'patients/_dental_chart_3d.html' %}
+</div>
+{% endblock %}

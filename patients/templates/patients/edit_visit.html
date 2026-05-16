@@ -27,7 +27,7 @@
             </div>
             {% endif %}
 
-            <!-- Nursing Data (Editable by doctor) -->
+            {% if specialty != 'dentistry' %}
             <div class="ui-sub-title nursing-title" style="margin-bottom: 18px;"><i class="fa-solid fa-user-nurse"></i> القسم التمريضي — قابل للتعديل</div>
             <div class="form-grid-layout">
                 <div class="form-group full-width">
@@ -56,12 +56,15 @@
                     {% endwith %}
                 {% endfor %}
             </div>
-
-            {% if specialty == 'dentistry' %}
-            {% include 'patients/_dental_chart.html' %}
             {% endif %}
 
+            {% if specialty == 'dentistry' %}
+            {% include 'patients/_dental_chart_3d.html' %}
+            {% endif %}
+
+            {% if specialty != 'dentistry' %}
             <div class="ui-sub-title medical-title" style="margin: 28px 0 24px;"><i class="fa-solid fa-user-doctor"></i> القسم الطبي — تعديل البيانات</div>
+            {% endif %}
 
             <div class="form-grid-layout">
                 {% for f in medical_specs %}

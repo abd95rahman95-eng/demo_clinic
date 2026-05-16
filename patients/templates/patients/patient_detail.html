@@ -231,6 +231,9 @@
             <a href="{% url 'nurse_create_visit' patient.id %}" class="btn-action btn-add">➕ إضافة زيارة تمريضية جديدة</a>
             {# Both doctors and nurses can book appointments. #}
             <a href="{% url 'book_appointment' patient.id %}" class="btn-action btn-edit" style="background:#ddd6fe; color:#3730a3;"><i class="fa-solid fa-calendar-plus"></i> احجز موعد</a>
+            {% if specialty == 'dentistry' and is_doctor %}
+            <a href="{% url 'dental_chart_page' patient.id %}" class="btn-action btn-edit" style="background:#cffafe; color:#0e7490;"><i class="fa-solid fa-tooth"></i> المخطط السني</a>
+            {% endif %}
             <a href="{% url 'edit_patient' patient.id %}" class="btn-action btn-edit"><i class="fa-solid fa-pen-to-square"></i> تعديل</a>
             {% if is_doctor %}
                 <button type="button" class="btn-action btn-delete" onclick="openDeleteModal('{% url 'delete_patient' patient.id %}', 'حذف المريض', '{{ patient.name|escapejs }}')"><i class="fa-solid fa-trash"></i> حذف</button>
@@ -383,7 +386,7 @@
     {% for visit in visits %}
     <div class="ui-visit-card">
         <div class="ui-visit-header {% if visit.status == 'consultation_pending' %}consultation{% endif %}">
-            <span class="ui-visit-badge">{% if visit.status == 'consultation_pending' %}استشارة قيد الانتظار{% else %}زيارة {{ forloop.counter }}{% endif %}</span>
+            <span class="ui-visit-badge">{% if visit.status == 'consultation_pending' %}استشارة قيد الانتظار{% else %}زيارة {% if sort_order == 'oldest' %}{{ forloop.counter }}{% else %}{{ forloop.revcounter }}{% endif %}{% endif %}</span>
             <span class="ui-visit-type">{{ visit.get_visit_type_display }}</span>
             <span class="ui-visit-date">{{ visit.created_at }}</span>
         </div>
@@ -442,7 +445,7 @@
             </div>
             {% endif %}
             <div class="ui-actions-bar">
-                <a href="{% url 'edit_visit' visit.id %}" class="btn-action btn-edit"><i class="fa-solid fa-pen-to-square"></i>{% if visit.status == 'consultation_pending' %} إكمال / تعديل الاستشارة{% else %} تعديل الزيارة{% endif %}</a>
+                <a href="{% url 'edit_visit' visit.id %}" class="btn-action btn-edit"><i class="fa-solid fa-pen-to-square"></i>{% if visit.status == 'consultation_pending' %} إكمال المعاينة{% else %} تعديل الزيارة{% endif %}</a>
                 {% if visit.status != 'consultation_pending' %}
                 <a href="{% url 'print_prescription' visit.id %}" target="_blank" class="btn-action btn-edit" style="background:#dbeafe; color:#1e40af;"><i class="fa-solid fa-print"></i> طباعة الوصفة</a>
                 {% endif %}
@@ -653,7 +656,7 @@ body {
         {% for visit in visits %}
         <div class="visit-card">
             <div class="visit-header">
-                <span class="visit-badge">زيارة {{ forloop.counter }}</span>
+                <span class="visit-badge">زيارة {% if sort_order == 'oldest' %}{{ forloop.counter }}{% else %}{{ forloop.revcounter }}{% endif %}</span>
                 <span class="visit-type">{{ visit.get_visit_type_display }}</span>
                 <span class="visit-date">{{ visit.created_at }}</span>
             </div>

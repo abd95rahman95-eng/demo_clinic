@@ -18,6 +18,7 @@ urlpatterns = [
 
     path('nurse-add-visit/<int:patient_id>/', views.nurse_create_visit, name='nurse_create_visit'),
     path('doctor-pending-visits/', views.doctor_pending_visits, name='doctor_pending_visits'),
+    path('doctor-consultation-visits/', views.doctor_consultation_visits, name='doctor_consultation_visits'),
     path('waiting-list/', views.waiting_list, name='waiting_list'),
     path('doctor-complete-visit/<int:visit_id>/', views.doctor_complete_visit, name='doctor_complete_visit'),
 
@@ -63,6 +64,19 @@ urlpatterns = [
     # AI medical assistance (Claude). Specialty-aware prompts; dentistry disabled.
     path('api/visits/<int:visit_id>/ai-assist/', views.ai_medical_assistance, name='ai_medical_assistance'),
 
+
+    # -- Dental chart v2 (3D, mode-driven) --
+    # Standalone full-page chart for a patient
+    path('dental/<int:patient_id>/', views.dental_chart_page, name='dental_chart_page'),
+    # Examination mode
+    path('api/dental/<int:patient_id>/status/', views.dental_update_status, name='dental_update_status'),
+    # Plan mode
+    path('api/dental/<int:patient_id>/plan-steps/', views.dental_create_plan_step, name='dental_create_plan_step'),
+    path('api/dental/<int:patient_id>/plan-steps/<int:step_id>/', views.dental_update_plan_step, name='dental_update_plan_step'),
+    path('api/dental/<int:patient_id>/plan-steps/<int:step_id>/delete/', views.dental_delete_plan_step, name='dental_delete_plan_step'),
+    # Procedures mode (visit-scoped)
+    path('api/dental/visits/<int:visit_id>/procedures/', views.dental_create_procedure, name='dental_create_procedure'),
+    path('api/dental/visits/<int:visit_id>/procedures/<int:procedure_id>/delete/', views.dental_delete_procedure, name='dental_delete_procedure'),
 
     path('', views.patient_list, name='patient_list'),
     path('<int:id>/', views.patient_detail, name='patient_detail'),

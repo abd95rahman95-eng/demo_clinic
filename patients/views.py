@@ -5,7 +5,14 @@ from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.http import JsonResponse
-from .models import Patient, Visit, UserProfile, VisitAttachment, ToothCondition, Notification, Clinic, Appointment
+from .models import (
+    Patient, Visit, UserProfile, VisitAttachment, ToothCondition, Notification,
+    Clinic, Appointment,
+    # Dental chart v2 (3D, mode-driven) data layer
+    ToothStatus, TreatmentPlan, PlanStep, VisitProcedure, VisitPlanSnapshot,
+    DENTAL_TOOTH_CHOICES, DENTAL_SURFACE_CHOICES, DENTAL_CONDITION_CHOICES,
+    DENTAL_PROCEDURE_CHOICES,
+)
 from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
@@ -246,6 +253,37 @@ def doctor_pending_visits(request):
         'visits': visits,
     })
 
+
+@login_required(login_url='login')
+def doctor_consultation_visits(request):
+    """Dedicated page for consultation_pending visits — visits the doctor
+    has marked as needing a referral / additional work. Reuses the pending-
+    visits card layout but shows days-since-consultation and doctor_notes
+    only (the dentist already moved past the nurse-side fields).
+    """
+    if not is_doctor(request.user):
+        return redirect('patient_list')
+
+    profile = UserProfile.objects.get(user=request.user)
+    visits_qs = Visit.objects.filter(
+        clinic=profile.clinic,
+        status='consultation_pending',
+    ).order_by('updated_at')
+
+    today = date.today()
+    rows = []
+    for v in visits_qs:
+        sent_at = (v.updated_at or v.created_at)
+        days = (today - sent_at.date()).days if sent_at else 0
+        rows.append({
+            'visit': v,
+            'days_since': days,
+        })
+
+    return render(request, 'patients/doctor_consultation_visits.html', {
+        'rows': rows,
+    })
+
 @login_required(login_url='login')
 def waiting_list(request):
     if not is_nurse(request.user):
@@ -360,34 +398,52 @@ def doctor_complete_visit(request, visit_id):
             specialty=clinic.specialty, exclude_nurse=True,
         )
 
-    # Dental chart: inherit previous visit's chart on first open
-    dental_data = {}
+    # Dental chart (v2 — 3D, mode-driven). For dentistry clinics we also seed
+    # the per-visit plan snapshot so the end-of-visit summary widget shows the
+    # correct "planned for today" list.
+    dental_v2_data = None
+    dental_v2_choices = None
     if clinic.specialty == 'dentistry':
-        _ensure_dental_chart_inherited(visit)
-        dental_data = _dental_conditions_dict(visit)
+        _ensure_visit_plan_snapshot(visit)
+        dental_v2_data = _dental_chart_context(visit.patient, visit)
+        dental_v2_choices = {
+            'conditions': DENTAL_CONDITION_CHOICES,
+            'surfaces':   DENTAL_SURFACE_CHOICES,
+            'procedures': DENTAL_PROCEDURE_CHOICES,
+            'priorities': TreatmentPlan.PRIORITY_CHOICES,
+        }
 
     vitals_specs = build_field_specs(get_nursing_fields(clinic.specialty))
-    medical_specs = build_field_specs(
-        ['history_of_present_illness', 'clinical_examination']
-        + get_specialty_medical_fields(clinic.specialty)
-        + COMMON_MEDICAL_FIELDS
-    )
+    # Dentistry uses a stripped-down medical section: the dental chart is the
+    # diagnosis & treatment surface, so the dentist only needs notes,
+    # prescription, attachments, and next appointment. Everything else
+    # (history_of_present_illness, clinical_examination, diagnosis,
+    # treatment_plan, patient_instructions, free-text prescription notes) is
+    # hidden for the dentistry specialty.
+    if clinic.specialty == 'dentistry':
+        medical_specs = build_field_specs(['doctor_notes', 'prescription_items'])
+    else:
+        medical_specs = build_field_specs(
+            ['history_of_present_illness', 'clinical_examination']
+            + get_specialty_medical_fields(clinic.specialty)
+            + COMMON_MEDICAL_FIELDS
+        )
 
     return render(request, 'patients/doctor_complete_visit.html', {
         'form': form,
         'visit': visit,
+        # The dental chart partial uses {{ patient.id }} directly, so the
+        # patient must be in the template context too.
+        'patient': visit.patient,
         'attachment_form': attachment_form,
         'clinic': clinic,
         'specialty': clinic.specialty,
         'quick_picks': get_quick_picks(clinic.specialty),
         'vitals_specs': vitals_specs,
         'medical_specs': medical_specs,
-        # Pass the dict directly — the template's json_script filter handles encoding.
-        'dental_data': dental_data,
-        'dental_choices': {
-            'conditions': ToothCondition.CONDITION_CHOICES,
-            'surfaces':   ToothCondition.SURFACE_CHOICES,
-        },
+        # Dental chart context (mode-driven SVG chart).
+        'dental_v2_data': dental_v2_data,
+        'dental_v2_choices': dental_v2_choices,
     })
 
 @login_required(login_url='login')
@@ -639,23 +695,35 @@ def delete_patient(request, id):
 
 @login_required(login_url='login')
 def delete_visit(request, id):
-    if not is_doctor(request.user):
-        return redirect('patient_list')
-
+    """Delete a visit. Permissions:
+      - Doctors can delete completed visits (doctor_completed).
+      - Nurses can delete their own nurse_draft visits (before the doctor
+        sees them) so they can fix a mis-created entry quickly."""
     profile = UserProfile.objects.get(user=request.user)
     visit = get_object_or_404(Visit, id=id)
-
     if visit.clinic != profile.clinic:
         return redirect('patient_list')
 
-    if visit.status != 'doctor_completed':
-        messages.error(request, "لا يمكن حذف زيارة غير مكتملة.")
-        return redirect('doctor_pending_visits')
+    user_is_doctor = is_doctor(request.user)
+    user_is_nurse = is_nurse(request.user)
+
+    if visit.status == 'doctor_completed':
+        if not user_is_doctor:
+            messages.error(request, "حذف الزيارات المكتملة متاح للطبيب فقط.")
+            return redirect('patient_detail', id=visit.patient.id)
+    elif visit.status == 'nurse_draft':
+        if not (user_is_nurse or user_is_doctor):
+            return redirect('patient_list')
+    else:
+        messages.error(request, "لا يمكن حذف هذه الزيارة في حالتها الحالية.")
+        return redirect('patient_detail', id=visit.patient.id)
 
     if request.method == 'POST':
         patient_id = visit.patient.id
         visit.delete()
         messages.success(request, "تم حذف الزيارة بنجاح")
+        if user_is_nurse and not user_is_doctor:
+            return redirect('waiting_list')
         return redirect('patient_detail', id=patient_id)
 
     return render(request, 'patients/confirm_delete_visit.html', {
@@ -751,33 +819,45 @@ def edit_visit(request, id):
 
             return redirect('patient_detail', id=visit.patient.id)
 
-    dental_data = {}
+    # Dental chart (v2 — 3D, mode-driven). On edit we just show what's there;
+    # the visit is already completed so plan snapshot would already exist.
+    dental_v2_data = None
+    dental_v2_choices = None
     if clinic.specialty == 'dentistry':
-        # Don't auto-copy on edit (visit is already completed); just show what's saved
-        dental_data = _dental_conditions_dict(visit)
+        dental_v2_data = _dental_chart_context(visit.patient, visit)
+        dental_v2_choices = {
+            'conditions': DENTAL_CONDITION_CHOICES,
+            'surfaces':   DENTAL_SURFACE_CHOICES,
+            'procedures': DENTAL_PROCEDURE_CHOICES,
+            'priorities': TreatmentPlan.PRIORITY_CHOICES,
+        }
 
     vitals_specs = build_field_specs(get_nursing_fields(clinic.specialty))
-    medical_specs = build_field_specs(
-        ['history_of_present_illness', 'clinical_examination']
-        + get_specialty_medical_fields(clinic.specialty)
-        + COMMON_MEDICAL_FIELDS
-    )
+    # Dentistry edits use the same minimal field set as doctor_complete_visit
+    # (chart + notes + prescription items + appointment + attachments). All
+    # other medical fields are hidden so they don't reappear when editing.
+    if clinic.specialty == 'dentistry':
+        medical_specs = build_field_specs(['doctor_notes', 'prescription_items'])
+    else:
+        medical_specs = build_field_specs(
+            ['history_of_present_illness', 'clinical_examination']
+            + get_specialty_medical_fields(clinic.specialty)
+            + COMMON_MEDICAL_FIELDS
+        )
 
     return render(request, 'patients/edit_visit.html', {
         'form': form,
         'visit': visit,
+        # Needed by _dental_chart_3d.html which references {{ patient.id }}.
+        'patient': visit.patient,
         'clinic': clinic,
         'attachment_form': attachment_form,
         'specialty': clinic.specialty,
         'quick_picks': get_quick_picks(clinic.specialty),
         'vitals_specs': vitals_specs,
         'medical_specs': medical_specs,
-        # Pass the dict directly — the template's json_script filter handles encoding.
-        'dental_data': dental_data,
-        'dental_choices': {
-            'conditions': ToothCondition.CONDITION_CHOICES,
-            'surfaces':   ToothCondition.SURFACE_CHOICES,
-        },
+        'dental_v2_data': dental_v2_data,
+        'dental_v2_choices': dental_v2_choices,
     })
 
 @login_required(login_url='login')
@@ -1998,6 +2078,476 @@ def print_prescription(request, visit_id):
         'free_text': (visit.prescription or '').strip(),
         'specialty_label': specialty_label,
         'doctor_name': doctor_name,
+    })
+
+
+# end of views.py
+
+# =============================================================================
+# Dental chart v2 -- examination / plan / procedures
+# =============================================================================
+#
+# Wiring overview
+# ---------------
+# The 3D chart template (`_dental_chart_3d.html`) gets all current data from
+# `_dental_chart_context(patient, visit)` and posts back via these AJAX
+# endpoints. There are deliberately no Django forms for the chart -- each
+# endpoint takes a small JSON body and returns either `{"ok": True, ...}` on
+# success or `{"ok": False, "error": "..."}` on failure. Keeps the JS layer
+# thin and easy to debug from the network panel.
+#
+# All endpoints validate:
+#   - the patient/visit belongs to the requesting user's clinic
+#   - the user is a doctor (the dentist is always a doctor here)
+#   - the tooth/surface/procedure code is in the allow-list shared with the
+#     models module
+# -----------------------------------------------------------------------------
+
+_VALID_TEETH       = {t for t, _lbl in DENTAL_TOOTH_CHOICES}
+_VALID_SURFACES    = {s for s, _lbl in DENTAL_SURFACE_CHOICES}
+_VALID_CONDITIONS  = {c for c, _lbl in DENTAL_CONDITION_CHOICES}
+_VALID_PROCEDURES  = {p for p, _lbl in DENTAL_PROCEDURE_CHOICES}
+_VALID_PRIORITIES  = {p for p, _lbl in TreatmentPlan.PRIORITY_CHOICES}
+
+
+def _read_json(request):
+    """Parse JSON body. Returns (payload, error_response_or_None)."""
+    try:
+        return _json.loads(request.body.decode('utf-8') or '{}'), None
+    except ValueError:
+        return None, JsonResponse({'ok': False, 'error': 'invalid_json'}, status=400)
+
+
+def _ensure_dental_access(request, patient_id=None, visit_id=None):
+    """Confirm the user is a doctor in the patient/visit's clinic.
+
+    Returns (patient, visit, error_response). Either patient or visit is
+    resolved depending on which id was supplied; the other is derived. If
+    access is denied or the user isn't a doctor, the error_response is
+    populated and the caller should return it.
+    """
+    if not is_doctor(request.user):
+        return None, None, JsonResponse({'ok': False, 'error': 'forbidden'}, status=403)
+    profile = UserProfile.objects.get(user=request.user)
+    visit = None
+    if visit_id is not None:
+        visit = get_object_or_404(Visit, id=visit_id, clinic=profile.clinic)
+        patient = visit.patient
+    elif patient_id is not None:
+        patient = get_object_or_404(Patient, id=patient_id, clinic=profile.clinic)
+    else:
+        return None, None, JsonResponse({'ok': False, 'error': 'no_id'}, status=400)
+    return patient, visit, None
+
+
+def _serialize_status(s):
+    return {
+        'id': s.id,
+        'tooth': s.tooth_number,
+        'surface': s.surface,
+        'condition': s.condition,
+        'condition_label': dict(DENTAL_CONDITION_CHOICES).get(s.condition, s.condition),
+        'note': s.note,
+        'visit_id': s.last_updated_visit_id,
+        'updated_at': s.updated_at.isoformat() if s.updated_at else None,
+    }
+
+
+def _serialize_step(step):
+    return {
+        'id': step.id,
+        'plan_id': step.plan_id,
+        'tooth': step.tooth_number,
+        'surface': step.surface,
+        'procedure': step.procedure,
+        'procedure_label': dict(DENTAL_PROCEDURE_CHOICES).get(step.procedure, step.procedure),
+        'priority': step.priority,
+        'priority_label': dict(TreatmentPlan.PRIORITY_CHOICES).get(step.priority, step.priority),
+        'status': step.status,
+        'status_label': dict(PlanStep.STATUS_CHOICES).get(step.status, step.status),
+        'notes': step.notes,
+        'canals': step.canals,
+        'sequence': step.sequence,
+        'plan_status': step.plan.status,
+    }
+
+
+def _serialize_procedure(p):
+    return {
+        'id': p.id,
+        'visit_id': p.visit_id,
+        'tooth': p.tooth_number,
+        'surface': p.surface,
+        'surfaces_csv': p.surfaces_csv,
+        'all_surfaces': p.all_surfaces,
+        'procedure': p.procedure,
+        'procedure_label': dict(DENTAL_PROCEDURE_CHOICES).get(p.procedure, p.procedure),
+        'material': p.material,
+        'canals': p.canals,
+        'notes': p.notes,
+        'plan_step_id': p.plan_step_id,
+        'created_at': p.created_at.isoformat() if p.created_at else None,
+    }
+
+
+def _dental_chart_context(patient, visit=None):
+    """Bundle everything the chart template needs into one dict.
+
+    Each table lookup is wrapped in try/except so that if the user hasn't
+    applied the new dental migrations yet, the page still renders an empty
+    chart instead of a 500. The error is logged but suppressed.
+    """
+    from django.db import DatabaseError
+    statuses = []
+    plan_steps = []
+    procedures = []
+    history = []
+    snapshot_ids = []
+    try:
+        statuses = [_serialize_status(s) for s in patient.tooth_statuses.all()]
+    except DatabaseError as e:
+        logging.getLogger(__name__).warning('dental: tooth_statuses unavailable (run migrations?): %s', e)
+    try:
+        plan_qs = TreatmentPlan.objects.filter(patient=patient).exclude(status='cancelled')
+        steps = PlanStep.objects.filter(plan__in=plan_qs).select_related('plan').order_by('plan_id', 'sequence', 'created_at')
+        plan_steps = [_serialize_step(st) for st in steps]
+    except DatabaseError as e:
+        logging.getLogger(__name__).warning('dental: plan steps unavailable (run migrations?): %s', e)
+    if visit is not None:
+        try:
+            for p in visit.dental_procedures.all().order_by('-created_at'):
+                procedures.append(_serialize_procedure(p))
+            prev = (
+                VisitProcedure.objects
+                .filter(visit__patient=patient)
+                .exclude(visit_id=visit.id)
+                .select_related('visit')
+                .order_by('-created_at')[:200]
+            )
+            for p in prev:
+                row = _serialize_procedure(p)
+                row['visit_date'] = p.visit.created_at.isoformat() if p.visit.created_at else None
+                history.append(row)
+            snapshot_ids = list(visit.plan_snapshots.values_list('plan_step_id', flat=True))
+        except DatabaseError as e:
+            logging.getLogger(__name__).warning('dental: procedures unavailable (run migrations?): %s', e)
+    return {
+        'statuses': statuses,
+        'plan_steps': plan_steps,
+        'procedures': procedures,
+        'history': history,
+        'snapshot': snapshot_ids,
+    }
+
+
+def _ensure_visit_plan_snapshot(visit):
+    """First time the dental chart is opened for a visit, freeze the list of
+    pending plan steps so the end-of-visit summary can compare 'planned for
+    today' vs 'done today' accurately even if new plan steps are created
+    mid-visit. Idempotent. Swallows DatabaseError so the page still renders
+    when the dental migrations haven't been applied yet."""
+    from django.db import DatabaseError
+    try:
+        if visit.plan_snapshots.exists():
+            return
+        pending_step_ids = (
+            PlanStep.objects
+            .filter(plan__patient=visit.patient, status='pending')
+            .exclude(plan__status='cancelled')
+            .values_list('id', flat=True)
+        )
+        VisitPlanSnapshot.objects.bulk_create(
+            [VisitPlanSnapshot(visit=visit, plan_step_id=pid) for pid in pending_step_ids]
+        )
+    except DatabaseError as e:
+        logging.getLogger(__name__).warning('dental: snapshot skipped (run migrations?): %s', e)
+
+
+# -----------------------------------------------------------------------------
+# Examination mode endpoint
+# -----------------------------------------------------------------------------
+@login_required(login_url='login')
+@require_POST
+def dental_update_status(request, patient_id):
+    """Create / update / clear one tooth surface examination finding."""
+    patient, _v, err = _ensure_dental_access(request, patient_id=patient_id)
+    if err:
+        return err
+    payload, perr = _read_json(request)
+    if perr:
+        return perr
+
+    tooth = str(payload.get('tooth', '')).strip()
+    surface = str(payload.get('surface', 'whole')).strip() or 'whole'
+    condition = str(payload.get('condition', '')).strip()
+    note = str(payload.get('note', '') or '')[:200]
+    visit_id = payload.get('visit_id')
+
+    if tooth not in _VALID_TEETH:
+        return JsonResponse({'ok': False, 'error': 'bad_tooth'}, status=400)
+    if surface not in _VALID_SURFACES:
+        return JsonResponse({'ok': False, 'error': 'bad_surface'}, status=400)
+
+    # Empty condition -> clear that surface (delete the row).
+    if condition == '':
+        ToothStatus.objects.filter(patient=patient, tooth_number=tooth, surface=surface).delete()
+        return JsonResponse({'ok': True, 'cleared': True})
+
+    if condition not in _VALID_CONDITIONS:
+        return JsonResponse({'ok': False, 'error': 'bad_condition'}, status=400)
+
+    visit = None
+    if visit_id:
+        profile = UserProfile.objects.get(user=request.user)
+        visit = Visit.objects.filter(id=visit_id, clinic=profile.clinic, patient=patient).first()
+
+    obj, _created = ToothStatus.objects.update_or_create(
+        patient=patient, tooth_number=tooth, surface=surface,
+        defaults={'condition': condition, 'note': note, 'last_updated_visit': visit},
+    )
+    return JsonResponse({'ok': True, 'status': _serialize_status(obj)})
+
+
+# -----------------------------------------------------------------------------
+# Plan mode endpoints
+# -----------------------------------------------------------------------------
+@login_required(login_url='login')
+@require_POST
+def dental_create_plan_step(request, patient_id):
+    """Add a plan step. If `plan_id` is supplied, append to that plan;
+    otherwise create a single-step plan and use it."""
+    patient, _v, err = _ensure_dental_access(request, patient_id=patient_id)
+    if err:
+        return err
+    payload, perr = _read_json(request)
+    if perr:
+        return perr
+
+    tooth = str(payload.get('tooth', '')).strip()
+    surface = str(payload.get('surface', 'whole')).strip() or 'whole'
+    procedure = str(payload.get('procedure', '')).strip()
+    priority = str(payload.get('priority', 'necessary')).strip() or 'necessary'
+    notes = str(payload.get('notes', '') or '')[:300]
+    canals = str(payload.get('canals', '') or '')[:120]
+    plan_id = payload.get('plan_id')
+
+    if tooth not in _VALID_TEETH:
+        return JsonResponse({'ok': False, 'error': 'bad_tooth'}, status=400)
+    if surface not in _VALID_SURFACES:
+        return JsonResponse({'ok': False, 'error': 'bad_surface'}, status=400)
+    if procedure not in _VALID_PROCEDURES:
+        return JsonResponse({'ok': False, 'error': 'bad_procedure'}, status=400)
+    if priority not in _VALID_PRIORITIES:
+        priority = 'necessary'
+
+    plan = None
+    if plan_id:
+        plan = TreatmentPlan.objects.filter(id=plan_id, patient=patient).first()
+    if plan is None:
+        plan = TreatmentPlan.objects.create(
+            patient=patient,
+            priority=priority,
+            created_by=request.user,
+        )
+
+    last_seq = plan.steps.order_by('-sequence').values_list('sequence', flat=True).first() or 0
+
+    step = PlanStep.objects.create(
+        plan=plan,
+        tooth_number=tooth,
+        surface=surface,
+        procedure=procedure,
+        priority=priority,
+        notes=notes,
+        canals=canals,
+        sequence=last_seq + 1,
+    )
+    plan.recalc_status()
+    return JsonResponse({'ok': True, 'step': _serialize_step(step)})
+
+
+@login_required(login_url='login')
+@require_POST
+def dental_update_plan_step(request, patient_id, step_id):
+    """Edit an existing plan step."""
+    patient, _v, err = _ensure_dental_access(request, patient_id=patient_id)
+    if err:
+        return err
+    step = get_object_or_404(PlanStep, id=step_id, plan__patient=patient)
+    payload, perr = _read_json(request)
+    if perr:
+        return perr
+
+    if 'procedure' in payload:
+        proc = str(payload['procedure']).strip()
+        if proc not in _VALID_PROCEDURES:
+            return JsonResponse({'ok': False, 'error': 'bad_procedure'}, status=400)
+        step.procedure = proc
+    if 'priority' in payload:
+        pr = str(payload['priority']).strip()
+        if pr in _VALID_PRIORITIES:
+            step.priority = pr
+    if 'notes' in payload:
+        step.notes = str(payload['notes'] or '')[:300]
+    if 'canals' in payload:
+        step.canals = str(payload['canals'] or '')[:120]
+    if 'status' in payload and payload['status'] in {'pending', 'done'}:
+        step.status = payload['status']
+    step.save()
+    step.plan.recalc_status()
+    return JsonResponse({'ok': True, 'step': _serialize_step(step)})
+
+
+@login_required(login_url='login')
+@require_POST
+def dental_delete_plan_step(request, patient_id, step_id):
+    patient, _v, err = _ensure_dental_access(request, patient_id=patient_id)
+    if err:
+        return err
+    step = get_object_or_404(PlanStep, id=step_id, plan__patient=patient)
+    plan = step.plan
+    step.delete()
+    plan.recalc_status()
+    # If we just emptied a plan, mark it cancelled so it stops showing up.
+    if not plan.steps.exists():
+        plan.status = 'cancelled'
+        plan.save(update_fields=['status', 'updated_at'])
+    return JsonResponse({'ok': True, 'cleared': True})
+
+
+# -----------------------------------------------------------------------------
+# Procedures mode endpoints
+# -----------------------------------------------------------------------------
+@login_required(login_url='login')
+@require_POST
+def dental_create_procedure(request, visit_id):
+    """Record a completed procedure on the current visit. If `plan_step_id`
+    is set, the corresponding plan step is auto-flipped to `done` and the
+    parent plan's status is recomputed."""
+    patient, visit, err = _ensure_dental_access(request, visit_id=visit_id)
+    if err:
+        return err
+    payload, perr = _read_json(request)
+    if perr:
+        return perr
+
+    tooth = str(payload.get('tooth', '')).strip()
+    surface = str(payload.get('surface', 'whole')).strip() or 'whole'
+    procedure = str(payload.get('procedure', '')).strip()
+    material = str(payload.get('material', '') or '')[:80]
+    canals = str(payload.get('canals', '') or '')[:120]
+    notes = str(payload.get('notes', '') or '')[:400]
+    plan_step_id = payload.get('plan_step_id')
+    extras = payload.get('extra_surfaces') or []
+
+    if tooth not in _VALID_TEETH:
+        return JsonResponse({'ok': False, 'error': 'bad_tooth'}, status=400)
+    if surface not in _VALID_SURFACES:
+        return JsonResponse({'ok': False, 'error': 'bad_surface'}, status=400)
+    if procedure not in _VALID_PROCEDURES:
+        return JsonResponse({'ok': False, 'error': 'bad_procedure'}, status=400)
+
+    if isinstance(extras, list):
+        extras_clean = [str(s).strip() for s in extras if str(s).strip() in _VALID_SURFACES]
+    else:
+        extras_clean = []
+    surfaces_csv = ','.join(extras_clean)
+
+    step = None
+    if plan_step_id:
+        step = PlanStep.objects.filter(id=plan_step_id, plan__patient=patient).first()
+
+    proc = VisitProcedure.objects.create(
+        visit=visit,
+        plan_step=step,
+        tooth_number=tooth,
+        surface=surface,
+        surfaces_csv=surfaces_csv,
+        procedure=procedure,
+        material=material,
+        canals=canals,
+        notes=notes,
+        performed_by=request.user,
+    )
+    if step is not None:
+        step.status = 'done'
+        step.save(update_fields=['status', 'updated_at'])
+        step.plan.recalc_status()
+
+    return JsonResponse({'ok': True, 'procedure': _serialize_procedure(proc)})
+
+
+@login_required(login_url='login')
+@require_POST
+def dental_delete_procedure(request, visit_id, procedure_id):
+    """Remove a completed procedure. If it was linked to a plan step we
+    revert the step back to `pending` (the dentist may have miss-clicked)."""
+    patient, visit, err = _ensure_dental_access(request, visit_id=visit_id)
+    if err:
+        return err
+    proc = get_object_or_404(VisitProcedure, id=procedure_id, visit=visit)
+    step = proc.plan_step
+    proc.delete()
+    if step is not None:
+        if not step.procedures.exists():
+            step.status = 'pending'
+            step.save(update_fields=['status', 'updated_at'])
+            step.plan.recalc_status()
+    return JsonResponse({'ok': True, 'cleared': True})
+
+
+# -----------------------------------------------------------------------------
+# Standalone dental chart page (entry point from patient_detail)
+# -----------------------------------------------------------------------------
+def _resolve_active_visit(patient, requested_visit_id=None):
+    """Find the visit to anchor the chart to. Priority:
+       1. explicit ?visit=<id> in the query string
+       2. patient's most recent nurse_draft / consultation_pending visit
+       3. patient's most recent visit overall
+       4. None -- chart loads with Procedures mode disabled
+    """
+    if requested_visit_id:
+        v = patient.visits.filter(id=requested_visit_id).first()
+        if v:
+            return v
+    open_v = (
+        patient.visits
+        .filter(status__in=['nurse_draft', 'consultation_pending'])
+        .order_by('-created_at')
+        .first()
+    )
+    if open_v:
+        return open_v
+    return patient.visits.order_by('-created_at').first()
+
+@login_required(login_url='login')
+
+@login_required(login_url='login')
+def dental_chart_page(request, patient_id):
+    """Standalone full-page dental chart for a patient. Visit context is
+    optional -- if no visit is open, Procedures mode is disabled (the dentist
+    can still examine and plan)."""
+    if not is_doctor(request.user):
+        return redirect('patient_list')
+    profile = UserProfile.objects.get(user=request.user)
+    patient = get_object_or_404(Patient, id=patient_id, clinic=profile.clinic)
+
+    visit = _resolve_active_visit(patient, request.GET.get('visit'))
+    if visit is not None:
+        _ensure_visit_plan_snapshot(visit)
+
+    ctx_data = _dental_chart_context(patient, visit)
+
+    return render(request, 'patients/dental_chart_page.html', {
+        'patient': patient,
+        'visit': visit,
+        'dental_v2_data': ctx_data,
+        'dental_v2_choices': {
+            'conditions': DENTAL_CONDITION_CHOICES,
+            'surfaces':   DENTAL_SURFACE_CHOICES,
+            'procedures': DENTAL_PROCEDURE_CHOICES,
+            'priorities': TreatmentPlan.PRIORITY_CHOICES,
+        },
     })
 
 

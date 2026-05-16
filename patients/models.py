@@ -668,3 +668,241 @@ class Appointment(models.Model):
 
     def __str__(self):
         return f"موعد {self.patient.name} - {self.scheduled_at:%Y-%m-%d %H:%M}"
+
+# =============================================================================
+# Dental: examination + treatment planning + per-visit procedures (v2)
+# =============================================================================
+#
+# This is the new mode-driven dental data layer that replaces the old
+# `ToothCondition` model for the chart UI. ToothCondition is kept in the
+# codebase for any legacy data + back-compat with `update_tooth_condition`
+# endpoint, but the new 3D chart writes to the models below.
+#
+#   * ToothStatus     -- current "what does the mouth look like" snapshot
+#                        (one row per patient * tooth * surface/root). Persists
+#                        across visits; the latest examination wins.
+#   * TreatmentPlan   -- a treatment plan for a patient (collection of steps).
+#   * PlanStep        -- one planned procedure (tooth + surface + procedure
+#                        type + priority + sequence). status: pending/done.
+#   * VisitProcedure  -- an actual procedure performed during a visit. May
+#                        link back to a PlanStep -- when set, the PlanStep is
+#                        flipped to done and the plan's aggregate status
+#                        recalculated.
+#
+# Shared choices live at module level so views, forms, and templates can
+# reach them without instantiating a model.
+# -----------------------------------------------------------------------------
+
+DENTAL_SURFACE_CHOICES = [
+    ('whole', 'كامل'),
+    ('O',     'إطباقي'),
+    ('M',     'إنسي'),
+    ('D',     'وحشي'),
+    ('B',     'دهليزي/شفوي'),
+    ('L',     'لساني/حنكي'),
+    ('R',     'جذر'),
+    ('MR',    'جذر إنسي'),
+    ('DR',    'جذر وحشي'),
+    ('PR',    'جذر حنكي'),
+]
+
+DENTAL_TOOTH_CHOICES = [(str(n), str(n)) for n in (
+    list(range(11, 19)) + list(range(21, 29)) +
+    list(range(31, 39)) + list(range(41, 49))
+)]
+
+DENTAL_CONDITION_CHOICES = [
+    ('healthy',          'سليم'),
+    ('caries',           'تسوس'),
+    ('existing_filling', 'حشوة موجودة'),
+    ('existing_crown',   'تلبيس موجود'),
+    ('existing_rct',     'سحب عصب سابق'),
+    ('fracture',         'كسر'),
+    ('wear',             'تآكل'),
+    ('missing',          'مفقود'),
+    ('implant',          'زرعة'),
+    ('discoloration',    'تصبغ'),
+]
+
+DENTAL_PROCEDURE_CHOICES = [
+    ('filling_composite', 'حشوة كومبوزيت'),
+    ('filling_amalgam',   'حشوة أملغم'),
+    ('rct',               'سحب عصب'),
+    ('extraction',        'خلع'),
+    ('crown',             'تلبيس'),
+    ('crown_temp',        'تلبيس مؤقت'),
+    ('bridge',            'جسر'),
+    ('implant',           'زرعة'),
+    ('cleaning',          'تنظيف وتلميع'),
+    ('whitening',         'تبييض'),
+    ('post_core',         'دعامة لبية'),
+    ('other',             'أخرى'),
+]
+
+
+class ToothStatus(models.Model):
+    """Current examination state of one tooth surface/root for one patient.
+
+    There's at most one row per (patient, tooth, surface). The "Examination
+    mode" of the chart writes here. `last_updated_visit` lets us reconstruct
+    which visit introduced or last changed a given finding (used by the
+    examination session-log view).
+    """
+    patient            = models.ForeignKey('Patient', on_delete=models.CASCADE, related_name='tooth_statuses')
+    tooth_number       = models.CharField(max_length=2, choices=DENTAL_TOOTH_CHOICES)
+    surface            = models.CharField(max_length=10, choices=DENTAL_SURFACE_CHOICES, default='whole')
+    condition          = models.CharField(max_length=20, choices=DENTAL_CONDITION_CHOICES)
+    note               = models.CharField(max_length=200, blank=True, default='')
+    last_updated_visit = models.ForeignKey('Visit', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at         = models.DateTimeField(auto_now_add=True)
+    updated_at         = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('patient', 'tooth_number', 'surface')
+        indexes = [
+            models.Index(fields=['patient']),
+            models.Index(fields=['patient', 'tooth_number']),
+        ]
+
+    def __str__(self):
+        return f"Status {self.patient_id} {self.tooth_number}/{self.surface} = {self.condition}"
+
+
+class TreatmentPlan(models.Model):
+    STATUS_CHOICES = [
+        ('planned',     'مخطط'),
+        ('in_progress', 'قيد التنفيذ'),
+        ('completed',   'مكتمل'),
+        ('cancelled',   'ملغى'),
+    ]
+    PRIORITY_CHOICES = [
+        ('urgent',    'عاجل'),
+        ('necessary', 'ضروري'),
+        ('optional',  'اختياري'),
+    ]
+
+    patient    = models.ForeignKey('Patient', on_delete=models.CASCADE, related_name='treatment_plans')
+    title      = models.CharField(max_length=200, blank=True, default='')
+    priority   = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='necessary')
+    status     = models.CharField(max_length=20, choices=STATUS_CHOICES, default='planned')
+    notes      = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('-created_at',)
+
+    def __str__(self):
+        return f"Plan #{self.pk} - {self.patient.name}"
+
+    def recalc_status(self, commit=True):
+        """Set status to planned / in_progress / completed based on step states.
+
+        - All steps pending -> planned
+        - Any step done but not all -> in_progress
+        - All steps done -> completed
+        - No steps -> planned (preserves cancelled if already cancelled)
+        """
+        if self.status == 'cancelled':
+            return
+        steps = list(self.steps.all())
+        if not steps:
+            new_status = 'planned'
+        else:
+            done = sum(1 for s in steps if s.status == 'done')
+            if done == 0:
+                new_status = 'planned'
+            elif done == len(steps):
+                new_status = 'completed'
+            else:
+                new_status = 'in_progress'
+        if new_status != self.status:
+            self.status = new_status
+            if commit:
+                self.save(update_fields=['status', 'updated_at'])
+
+
+class PlanStep(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'قيد الانتظار'),
+        ('done',    'تم'),
+    ]
+
+    plan         = models.ForeignKey(TreatmentPlan, on_delete=models.CASCADE, related_name='steps')
+    tooth_number = models.CharField(max_length=2, choices=DENTAL_TOOTH_CHOICES)
+    surface      = models.CharField(max_length=10, choices=DENTAL_SURFACE_CHOICES, default='whole')
+    procedure    = models.CharField(max_length=30, choices=DENTAL_PROCEDURE_CHOICES)
+    priority     = models.CharField(max_length=20, choices=TreatmentPlan.PRIORITY_CHOICES, default='necessary')
+    sequence     = models.PositiveIntegerField(default=0)
+    notes        = models.CharField(max_length=300, blank=True, default='')
+    status       = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    canals       = models.CharField(
+        max_length=120, blank=True, default='',
+        help_text='Comma-separated canal codes for RCT, e.g. "MB,DB,P".',
+    )
+    created_at   = models.DateTimeField(auto_now_add=True)
+    updated_at   = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ('sequence', 'created_at')
+        indexes = [
+            models.Index(fields=['plan']),
+            models.Index(fields=['tooth_number']),
+        ]
+
+    def __str__(self):
+        return f"Step #{self.pk} {self.tooth_number}/{self.surface} {self.procedure}"
+
+
+class VisitProcedure(models.Model):
+    """An actual procedure performed during a visit. The single source of truth
+    for "what was done today". May reference a PlanStep -- when present, the
+    PlanStep is auto-flipped to `done` and the parent plan is rechecked."""
+    visit        = models.ForeignKey(Visit, on_delete=models.CASCADE, related_name='dental_procedures')
+    plan_step    = models.ForeignKey(PlanStep, on_delete=models.SET_NULL, null=True, blank=True, related_name='procedures')
+    tooth_number = models.CharField(max_length=2, choices=DENTAL_TOOTH_CHOICES)
+    surface      = models.CharField(max_length=10, choices=DENTAL_SURFACE_CHOICES, default='whole')
+    surfaces_csv = models.CharField(
+        max_length=60, blank=True, default='',
+        help_text='Comma-separated extra surfaces for multi-surface procedures, e.g. "O,M".',
+    )
+    procedure    = models.CharField(max_length=30, choices=DENTAL_PROCEDURE_CHOICES)
+    material     = models.CharField(max_length=80, blank=True, default='')
+    canals       = models.CharField(max_length=120, blank=True, default='')
+    notes        = models.CharField(max_length=400, blank=True, default='')
+    performed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='+')
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-created_at',)
+        indexes = [
+            models.Index(fields=['visit']),
+            models.Index(fields=['tooth_number']),
+        ]
+
+    def __str__(self):
+        return f"Procedure #{self.pk} {self.tooth_number}/{self.surface} {self.procedure}"
+
+    @property
+    def all_surfaces(self):
+        """Return the primary surface plus any extras from surfaces_csv."""
+        extras = [s.strip() for s in (self.surfaces_csv or '').split(',') if s.strip()]
+        return [self.surface] + [s for s in extras if s != self.surface]
+
+
+class VisitPlanSnapshot(models.Model):
+    """Frozen list of plan steps that were pending when a visit began.
+
+    Created the first time the dental chart is opened for a visit. Lets
+    the "End-of-visit summary" show "Planned for today" vs "Completed today"
+    accurately even if the dentist creates new plan steps mid-visit (those
+    wouldn't be in the snapshot, so they don't inflate the planned-for-today
+    list).
+    """
+    visit      = models.ForeignKey(Visit, on_delete=models.CASCADE, related_name='plan_snapshots')
+    plan_step  = models.ForeignKey(PlanStep, on_delete=models.CASCADE, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('visit', 'plan_step')

@@ -7,11 +7,10 @@
 
 <!-- ── Clinic header ── -->
 <div class="clinic-header-card">
-    <div class="welcome-text">أهلاً بك {{ request.user.first_name }} <i class="fa-solid fa-hand-sparkles"></i></div>
+    <div class="welcome-text">أهلاً بك {{ request.user.first_name }}</div>
     <div class="clinic-name"><i class="fa-solid fa-hospital"></i> عيادة {{ clinic_name }}</div>
     <div class="clinic-meta">
-        <span><i class="fa-solid fa-user-tag"></i> الدور: {{ user_role }}</span>
-        <span>|</span>
+        
         <span><i class="fa-solid fa-calendar-day"></i> اليوم: {{ formatted_date }}</span>
         <span>|</span>
         <span {% if request.user.userprofile.clinic.subscription_days_count < 3 %}style="color: #ef4444; font-weight: bold;"{% endif %}><i class="fa-solid fa-clock-rotate-left"></i> الاشتراك المتبقي: {{ request.user.userprofile.clinic.subscription_days_left }}</span>

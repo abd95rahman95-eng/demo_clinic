@@ -59,6 +59,7 @@
             {% endif %}
 
             {% if specialty == 'dentistry' %}
+            {{ form.visit_type.as_hidden }}
             {% include 'patients/_dental_chart_3d.html' %}
             {% endif %}
 

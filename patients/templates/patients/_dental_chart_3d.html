@@ -129,6 +129,15 @@ All state is local to the partial — server-side state changes go through the
     }
     .tooth-surface:hover { stroke: #1a6b3c; stroke-width: 1.8; }
 
+    /* Curved outer border of each crown (drawn on top of the clipped grid) */
+    .tooth-outline {
+        fill: none;
+        stroke: #94a3b8;
+        stroke-width: 1.3;
+        stroke-linejoin: round;
+        pointer-events: none;
+    }
+
     /* Examination condition colors (also used by legend swatches) */
     .tooth-surface.cond-healthy          { fill: #ffffff; }
     .tooth-surface.cond-caries           { fill: #b02a37; }
@@ -522,6 +531,10 @@ All state is local to the partial — server-side state changes go through the
                 <label>الحالة</label>
                 <div class="dchart3d-grid" id="dchart3d-exam-grid"></div>
             </div>
+            <div class="dchart3d-form-row" id="dchart3d-exam-extra-row" style="display:none;">
+                <label>أسطح إضافية (اضغط لتحديد متعدد)</label>
+                <div class="dchart3d-grid" id="dchart3d-exam-extras"></div>
+            </div>
             <div class="dchart3d-form-row">
                 <label>ملاحظة (اختياري)</label>
                 <input type="text" class="dchart3d-input" id="dchart3d-exam-note" maxlength="200">
@@ -542,6 +555,10 @@ All state is local to the partial — server-side state changes go through the
                 <label>القنوات (سحب العصب)</label>
                 <input type="text" class="dchart3d-input" id="dchart3d-plan-canals"
                        placeholder="مثال: MB,DB,P" maxlength="120">
+            </div>
+            <div class="dchart3d-form-row" id="dchart3d-plan-extra-row" style="display:none;">
+                <label>أسطح إضافية (اضغط لتحديد متعدد)</label>
+                <div class="dchart3d-grid" id="dchart3d-plan-extras"></div>
             </div>
             <div class="dchart3d-form-row">
                 <label>ملاحظات</label>
@@ -667,9 +684,40 @@ var state = {
     selection: null,
     extraSurfaces: new Set()
 };
-(INITIAL.statuses || []).forEach(function (s) {
-    state.statuses[s.tooth + '-' + s.surface] = s;
-});
+// A finding/step can span several surfaces (stored on one record). Helpers
+// below treat each record as a single entity while still allowing lookup by
+// any of the surfaces it covers.
+function statusSurfaces(s) {
+    return (s && s.surfaces && s.surfaces.length) ? s.surfaces : [s.surface];
+}
+function registerStatus(s) {
+    // Index the same record under each surface it covers, so clicking any of
+    // those surfaces on the chart resolves to this finding.
+    statusSurfaces(s).forEach(function (sf) { state.statuses[s.tooth + '-' + sf] = s; });
+}
+function statusRecords() {
+    // Unique findings (de-duplicated — a multi-surface record is indexed under
+    // several keys but should appear once in lists and painting).
+    var seen = {}, out = [];
+    Object.keys(state.statuses).forEach(function (k) {
+        var s = state.statuses[k];
+        if (!s) return;
+        var key = (s.id != null) ? ('#' + s.id) : (s.tooth + '-' + s.surface);
+        if (!seen[key]) { seen[key] = 1; out.push(s); }
+    });
+    return out;
+}
+function removeStatusBySurfaces(tooth, surfs) {
+    statusRecords().forEach(function (s) {
+        if (s.tooth !== tooth) return;
+        var ss = statusSurfaces(s);
+        if (ss.some(function (sf) { return surfs.indexOf(sf) >= 0; })) {
+            ss.forEach(function (sf) { delete state.statuses[tooth + '-' + sf]; });
+        }
+    });
+}
+
+(INITIAL.statuses || []).forEach(function (s) { registerStatus(s); });
 (INITIAL.plan_steps || []).forEach(function (st) { state.planSteps[st.id] = st; });
 (INITIAL.procedures || []).forEach(function (p) { state.procedures[p.id] = p; });
 
@@ -699,15 +747,18 @@ var svg = document.getElementById('dchart3d-svg');
 var SVG_NS = 'http://www.w3.org/2000/svg';
 
 // Layout constants (px in the 760x285 viewBox)
-var TOOTH_W = 40, TOOTH_H = 60, ROOT_H = 32, GAP_X = 5, ROW_GAP = 26;
+// Crown height reduced to 65% of the original 60px. GAP_CR is the visible
+// gap separating each crown from its root(s).
+var TOOTH_W = 40, TOOTH_H = 39, ROOT_H = 32, GAP_X = 5, ROW_GAP = 26;
+var GAP_CR = 5;
 var TOTAL_COLS = 16;
 var CHART_W = TOTAL_COLS * (TOOTH_W + GAP_X) - GAP_X;
 var ORIGIN_X = (760 - CHART_W) / 2;
 var UP_ROOT_Y  = 30;
-var UP_TOOTH_Y = UP_ROOT_Y + ROOT_H;
+var UP_TOOTH_Y = UP_ROOT_Y + ROOT_H + GAP_CR;
 var UP_LABEL_Y = UP_TOOTH_Y + TOOTH_H + 14;
 var LO_TOOTH_Y = UP_LABEL_Y + ROW_GAP;
-var LO_ROOT_Y  = LO_TOOTH_Y + TOOTH_H;
+var LO_ROOT_Y  = LO_TOOTH_Y + TOOTH_H + GAP_CR;
 var LO_LABEL_Y = LO_ROOT_Y + ROOT_H + 14;
 
 // Lookup: "tooth-surface" -> SVG element (so paint operations are O(1))
@@ -719,27 +770,146 @@ function svgEl(name, attrs) {
     return el;
 }
 
-// Tapered root path. Upper: wide at bottom (gum), narrows to tip at top.
-// Lower: mirrored.
+// ── Anatomical crown silhouette ────────────────────────────────────
+// Classify a tooth by its FDI position digit to give it a realistic
+// profile: incisors narrow, canines pointed, premolars/molars wide.
+function toothType(tnum) {
+    var pos = parseInt(String(tnum)[1], 10);
+    if (pos <= 2) return 'incisor';
+    if (pos === 3) return 'canine';
+    if (pos <= 5) return 'premolar';
+    return 'molar';
+}
+
+// Returns an SVG path "d" for a soft, semi-anatomical crown outline inside
+// the bounding box (x, y, w, h). The "neck" (cervical) edge sits against the
+// root; the opposite edge is the biting/incisal edge.
+//   incisors  — narrow body, near-flat incisal edge
+//   canines   — narrow body, single pointed cusp
+//   premolars — medium body, gently scalloped occlusal edge, soft corners
+//   molars    — wide body, large rounded corners, scalloped occlusal edge
+function crownOutlinePath(x, y, w, h, isUpper, type) {
+    var neckY = isUpper ? y : (y + h);     // cervical edge (against root)
+    var bitY  = isUpper ? (y + h) : y;      // biting / incisal edge
+    var dir   = isUpper ? 1 : -1;           // sign of travel neck -> biting
+
+    var insMap   = { incisor: 0.20, canine: 0.16, premolar: 0.11, molar: 0.05 };
+    var crMap    = { incisor: 0.12, canine: 0.12, premolar: 0.16, molar: 0.22 };
+    var bulgeMap = { incisor: 0.035, canine: 0.04, premolar: 0.05, molar: 0.06 };
+
+    var ins   = w * (insMap[type]   != null ? insMap[type]   : 0.12);
+    var cr    = w * (crMap[type]    != null ? crMap[type]    : 0.14);
+    var bulge = w * (bulgeMap[type] != null ? bulgeMap[type] : 0.045);
+
+    var left  = x + ins;
+    var right = x + w - ins;
+    var midX  = x + w / 2;
+
+    // Neck slightly narrower than the body for a natural cervical taper.
+    var neckIns = ins + w * 0.04;
+    var nLeft   = x + neckIns;
+    var nRight  = x + w - neckIns;
+
+    var bcY = bitY - dir * cr;              // y where biting corners begin
+    var f = function (n) { return n.toFixed(2); };
+    var d = [];
+
+    d.push('M ' + f(nLeft) + ' ' + f(neckY));
+    // Cervical edge: gentle convex curve toward the root.
+    d.push('Q ' + f(midX) + ' ' + f(neckY - dir * h * 0.05) +
+           ' ' + f(nRight) + ' ' + f(neckY));
+    // Right side: bow outward (mesial/distal contour) to biting corner.
+    d.push('C ' + f(right + bulge) + ' ' + f(neckY + dir * h * 0.32) +
+           ' ' + f(right + bulge * 0.5) + ' ' + f(bitY - dir * h * 0.30) +
+           ' ' + f(right) + ' ' + f(bcY));
+    // Biting-right rounded corner.
+    d.push('Q ' + f(right) + ' ' + f(bitY) +
+           ' ' + f(right - cr) + ' ' + f(bitY));
+    // Biting / incisal / occlusal edge (profile depends on tooth type).
+    if (type === 'canine') {
+        var tipY = bitY + dir * h * 0.10;
+        d.push('Q ' + f(midX + cr * 0.4) + ' ' + f(bitY) +
+               ' ' + f(midX) + ' ' + f(tipY));
+        d.push('Q ' + f(midX - cr * 0.4) + ' ' + f(bitY) +
+               ' ' + f(left + cr) + ' ' + f(bitY));
+    } else if (type === 'molar' || type === 'premolar') {
+        var amp = h * 0.035;
+        d.push('C ' + f(x + w * 0.66) + ' ' + f(bitY - dir * amp) +
+               ' ' + f(x + w * 0.60) + ' ' + f(bitY + dir * amp) +
+               ' ' + f(midX) + ' ' + f(bitY));
+        d.push('C ' + f(x + w * 0.40) + ' ' + f(bitY - dir * amp) +
+               ' ' + f(x + w * 0.34) + ' ' + f(bitY + dir * amp) +
+               ' ' + f(left + cr) + ' ' + f(bitY));
+    } else {
+        // incisor: near-flat incisal edge with a hint of curve
+        d.push('Q ' + f(midX) + ' ' + f(bitY + dir * h * 0.02) +
+               ' ' + f(left + cr) + ' ' + f(bitY));
+    }
+    // Biting-left rounded corner.
+    d.push('Q ' + f(left) + ' ' + f(bitY) +
+           ' ' + f(left) + ' ' + f(bcY));
+    // Left side: bow outward back up to the neck.
+    d.push('C ' + f(left - bulge * 0.5) + ' ' + f(bitY - dir * h * 0.30) +
+           ' ' + f(left - bulge) + ' ' + f(neckY + dir * h * 0.32) +
+           ' ' + f(nLeft) + ' ' + f(neckY));
+    d.push('Z');
+    return d.join(' ');
+}
+
+// Collects the silhouette path "d" strings (crown outline + roots) stored in
+// a tooth's whole-tooth clip path. Used to confine full-tooth fills/markers
+// to the real tooth shape.
+function wholeSilhouetteDs(tooth) {
+    var out = [];
+    var clip = defs && defs.querySelector('#wholeclip-' + tooth);
+    if (!clip) return out;
+    Array.prototype.forEach.call(clip.childNodes, function (node) {
+        if (node.getAttribute) {
+            var d = node.getAttribute('d');
+            if (d) out.push(d);
+        }
+    });
+    return out;
+}
+
+// Realistic root path. A root is wide at the cervical (gum) end, tapers with
+// gently concave sides through the body, and finishes in a narrow rounded
+// apex — the way a natural tooth root looks. Works for both arches: for upper
+// teeth the apex points up, for lower teeth it points down.
 function rootPath(x, y, w, h, isUpper) {
-    var taper = w * 0.30;
-    var tipY = isUpper ? y : (y + h);
-    var baseY = isUpper ? (y + h) : y;
-    var tipPad = w * 0.18;
-    var leftBaseX = x;
-    var rightBaseX = x + w;
-    var leftTipX = x + taper;
-    var rightTipX = x + w - taper;
-    var midY = (tipY + baseY) / 2;
-    return 'M ' + leftBaseX + ' ' + baseY +
-           ' C ' + (leftBaseX + 1) + ' ' + midY + ', ' +
-                   (leftTipX - 2) + ' ' + (tipY + (isUpper ? 4 : -4)) + ', ' +
-                   (leftTipX + tipPad / 2) + ' ' + tipY +
-           ' L ' + (rightTipX - tipPad / 2) + ' ' + tipY +
-           ' C ' + (rightTipX + 2) + ' ' + (tipY + (isUpper ? 4 : -4)) + ', ' +
-                   (rightBaseX - 1) + ' ' + midY + ', ' +
-                   rightBaseX + ' ' + baseY +
-           ' Z';
+    var cx    = x + w / 2;
+    var baseY = isUpper ? (y + h) : y;          // wide cervical end (near crown)
+    var tipY  = isUpper ? y : (y + h);          // narrow apex
+    var s     = (tipY - baseY) / h;             // direction base -> tip (+1 / -1)
+
+    var baseHalf = w * 0.46;                     // half-width at the cervix
+    var tipHalf  = w * 0.13;                     // half-width near the apex
+    var tipR     = h * 0.10;                     // vertical extent of apex rounding
+
+    // y a distance d from the tip, measured back toward the base
+    function toBase(d) { return tipY - s * d; }
+    // y a distance d from the base, measured toward the tip
+    function fromBase(d) { return baseY + s * d; }
+    var f = function (n) { return n.toFixed(2); };
+
+    return 'M ' + f(cx - baseHalf) + ' ' + f(baseY) +
+        // left side: shoulder bulge then concave taper down to the apex
+        ' C ' + f(cx - baseHalf * 0.94) + ' ' + f(fromBase(h * 0.30)) + ', ' +
+                f(cx - tipHalf * 1.7)   + ' ' + f(toBase(h * 0.34))   + ', ' +
+                f(cx - tipHalf)         + ' ' + f(toBase(tipR)) +
+        // rounded apex (left half then right half)
+        ' Q ' + f(cx - tipHalf * 0.55) + ' ' + f(tipY) + ', ' +
+                f(cx)                   + ' ' + f(tipY) +
+        ' Q ' + f(cx + tipHalf * 0.55) + ' ' + f(tipY) + ', ' +
+                f(cx + tipHalf)         + ' ' + f(toBase(tipR)) +
+        // right side back up to the cervix
+        ' C ' + f(cx + tipHalf * 1.7)   + ' ' + f(toBase(h * 0.34))   + ', ' +
+                f(cx + baseHalf * 0.94) + ' ' + f(fromBase(h * 0.30)) + ', ' +
+                f(cx + baseHalf)        + ' ' + f(baseY) +
+        // cervical line, gently bulged toward the crown
+        ' Q ' + f(cx) + ' ' + f(baseY - s * (h * 0.06)) + ', ' +
+                f(cx - baseHalf) + ' ' + f(baseY) +
+        ' Z';
 }
 
 function rootSpecsFor(tooth) {
@@ -767,20 +937,30 @@ function rootSpecsFor(tooth) {
 
 function buildRoots(tnum, x, isUpper) {
     var out = [];
+    var rootDs = [];                  // raw path "d" strings (for whole-tooth clip)
     var specs = rootSpecsFor(tnum);
     var n = specs.length;
     var totalW = TOOTH_W - 4;
     var rootGap = (n > 1) ? 2 : 0;
     var rootW = (totalW - (n - 1) * rootGap) / n;
     var rootBaseX = x + 2;
+    // Single-rooted teeth (incisors, canines, premolars) get a slim root —
+    // only a little wider than an individual molar root — centered under the
+    // crown, instead of spanning the full crown width.
+    if (n === 1) {
+        rootW = TOOTH_W * 0.36;
+        rootBaseX = x + (TOOTH_W - rootW) / 2;
+    }
     var rootY = isUpper ? UP_ROOT_Y : LO_ROOT_Y;
     for (var i = 0; i < n; i++) {
         var rx = rootBaseX + i * (rootW + rootGap);
+        var rd = rootPath(rx, rootY, rootW, ROOT_H, isUpper);
+        rootDs.push(rd);
         var path = svgEl('path', {
             'class': 'tooth-root',
             'data-tooth': tnum,
             'data-surface': specs[i].code,
-            d: rootPath(rx, rootY, rootW, ROOT_H, isUpper)
+            d: rd
         });
         SURFACE_ELEMENTS[tnum + '-' + specs[i].code] = path;
         out.push(path);
@@ -794,7 +974,7 @@ function buildRoots(tnum, x, isUpper) {
             out.push(lbl);
         }
     }
-    return out;
+    return { out: out, rootDs: rootDs };
 }
 
 function buildCrown(tnum, x, isUpper) {
@@ -807,6 +987,18 @@ function buildCrown(tnum, x, isUpper) {
     var topSurface    = isUpper ? 'B' : 'L';
     var bottomSurface = isUpper ? 'L' : 'B';
     var bandH = TOOTH_H / 3;
+
+    // Anatomical crown silhouette + clip path so the rectangular surface grid
+    // is trimmed exactly to the curved boundary.
+    var crownD = crownOutlinePath(x, toothY, TOOTH_W, TOOTH_H, isUpper, toothType(tnum));
+    var clipId = 'crownclip-' + tnum;
+    var clip = svgEl('clipPath', { id: clipId, clipPathUnits: 'userSpaceOnUse' });
+    clip.appendChild(svgEl('path', { d: crownD }));
+    defs.appendChild(clip);
+
+    // Surface rects live inside this clipped group.
+    var surfGroup = svgEl('g', { 'clip-path': 'url(#' + clipId + ')' });
+
     function rect(surface, x_, y_, w_, h_) {
         var r = svgEl('rect', {
             'class': 'tooth-surface',
@@ -814,7 +1006,7 @@ function buildCrown(tnum, x, isUpper) {
             x: x_, y: y_, width: w_, height: h_
         });
         SURFACE_ELEMENTS[tnum + '-' + surface] = r;
-        out.push(r);
+        surfGroup.appendChild(r);
     }
     if (ANTERIOR_TEETH.has(String(tnum))) {
         // 4-zone: top / (M | D) / bottom — no occlusal
@@ -831,7 +1023,15 @@ function buildCrown(tnum, x, isUpper) {
         rect(rightSurface,  x + 2 * cellW,     toothY + bandH,     cellW,      bandH);
         rect(bottomSurface, x,                 toothY + 2 * bandH, TOOTH_W,    bandH);
     }
-    return out;
+
+    out.push(surfGroup);
+    // Crisp curved border drawn on top of the clipped grid.
+    out.push(svgEl('path', {
+        'class': 'tooth-outline',
+        'data-tooth': tnum,
+        d: crownD
+    }));
+    return { out: out, crownD: crownD };
 }
 
 function buildTooth(tnum, x, isUpper) {
@@ -841,8 +1041,23 @@ function buildTooth(tnum, x, isUpper) {
         'data-x': x,
         'data-is-upper': isUpper ? '1' : '0'
     });
-    buildRoots(tnum, x, isUpper).forEach(function (el) { g.appendChild(el); });
-    buildCrown(tnum, x, isUpper).forEach(function (el) { g.appendChild(el); });
+    var roots = buildRoots(tnum, x, isUpper);
+    roots.out.forEach(function (el) { g.appendChild(el); });
+    var crown = buildCrown(tnum, x, isUpper);
+    crown.out.forEach(function (el) { g.appendChild(el); });
+
+    // Whole-tooth clip: union of crown outline + all root shapes, so a
+    // full-tooth fill or marker stays confined to the real tooth silhouette.
+    var wholeClip = svgEl('clipPath', {
+        id: 'wholeclip-' + tnum,
+        clipPathUnits: 'userSpaceOnUse'
+    });
+    wholeClip.appendChild(svgEl('path', { d: crown.crownD }));
+    roots.rootDs.forEach(function (rd) {
+        wholeClip.appendChild(svgEl('path', { d: rd }));
+    });
+    defs.appendChild(wholeClip);
+
     // Tooth-number label is the "whole tooth" click target.
     var labelY = isUpper ? UP_LABEL_Y : LO_LABEL_Y;
     var hit = svgEl('rect', {
@@ -871,6 +1086,10 @@ function renderRow(arr, isUpper) {
 
 // Build the whole chart
 while (svg.firstChild) svg.removeChild(svg.firstChild);
+// Defs holds the per-tooth clip paths that confine the surface grid and
+// whole-tooth fills inside the anatomical crown/root silhouette.
+var defs = svgEl('defs');
+svg.appendChild(defs);
 renderRow(UPPER, true);
 renderRow(LOWER, false);
 // Vertical quadrant divider
@@ -918,21 +1137,15 @@ function clearAllSurfaceConditions() {
 }
 
 function applyWholeOverlay(tooth, condition) {
-    // Find this tooth's group and add a translucent overlay rect that
-    // covers the entire crown+roots height.
-    var toothG = svg.querySelector('g.tooth[data-tooth="' + tooth + '"]');
-    if (!toothG) return;
-    var x = parseFloat(toothG.getAttribute('data-x'));
-    var isUpper = toothG.getAttribute('data-is-upper') === '1';
-    var y = isUpper ? UP_ROOT_Y : LO_TOOTH_Y;
-    var totalH = ROOT_H + TOOTH_H;
-    var ov = svgEl('rect', {
-        'class': 'tooth-whole-overlay cond-' + condition,
-        x: x - 1, y: y - 1,
-        width: TOOTH_W + 2, height: totalH + 2,
-        rx: 4, ry: 4
-    });
-    wholeLayer.appendChild(ov);
+    // Build the full-tooth fill from the real silhouette geometry (crown
+    // outline + roots) so the color stays strictly inside the curved outer
+    // boundary instead of bleeding into a rectangle. Group opacity avoids
+    // double-darkening where crown and roots overlap.
+    var ds = wholeSilhouetteDs(tooth);
+    if (!ds.length) return;
+    var g = svgEl('g', { 'class': 'tooth-whole-overlay cond-' + condition });
+    ds.forEach(function (d) { g.appendChild(svgEl('path', { d: d })); });
+    wholeLayer.appendChild(g);
 }
 
 function getSurfaceBounds(tooth, surface) {
@@ -955,31 +1168,30 @@ function getSurfaceBounds(tooth, surface) {
 
 function markPlanOnSurface(tooth, surface, step) {
     if (surface === 'whole') {
-        var toothG = svg.querySelector('g.tooth[data-tooth="' + tooth + '"]');
-        if (!toothG) return;
-        var x = parseFloat(toothG.getAttribute('data-x'));
-        var isUpper = toothG.getAttribute('data-is-upper') === '1';
-        var y = isUpper ? UP_ROOT_Y : LO_TOOTH_Y;
-        var totalH = ROOT_H + TOOTH_H;
+        // Trace the dashed plan border around the real tooth silhouette
+        // (crown + roots) rather than a rectangle.
         var statusCls = step && step.status === 'done' ? ' plan-done'
                       : (step && step.plan_status === 'in_progress' ? ' plan-in-progress' : '');
-        var r = svgEl('rect', {
-            'class': 'surface-plan-overlay' + statusCls,
-            x: x - 2, y: y - 2,
-            width: TOOTH_W + 4, height: totalH + 4,
-            rx: 5, ry: 5
+        var ds = wholeSilhouetteDs(tooth);
+        if (!ds.length) return;
+        ds.forEach(function (d) {
+            planLayer.appendChild(svgEl('path', {
+                'class': 'surface-plan-overlay' + statusCls,
+                d: d
+            }));
         });
-        planLayer.appendChild(r);
         return;
     }
     var b = getSurfaceBounds(tooth, surface);
     if (!b) return;
     var statusCls2 = step && step.status === 'done' ? ' plan-done'
                    : (step && step.plan_status === 'in_progress' ? ' plan-in-progress' : '');
+    // Clip the surface plan border to the tooth silhouette.
     planLayer.appendChild(svgEl('rect', {
         'class': 'surface-plan-overlay' + statusCls2,
         x: b.x + 1, y: b.y + 1, width: b.w - 2, height: b.h - 2,
-        rx: 2, ry: 2
+        rx: 2, ry: 2,
+        'clip-path': 'url(#wholeclip-' + tooth + ')'
     }));
 }
 
@@ -987,11 +1199,13 @@ function markProcedureOnSurface(tooth, surface, procedure) {
     if (surface === 'whole') return;
     var b = getSurfaceBounds(tooth, surface);
     if (!b) return;
+    // Clip to the tooth silhouette so the tint follows the curved outline.
     procLayer.appendChild(svgEl('rect', {
         'class': 'surface-proc-overlay proc-' + procedure,
         x: b.x + 0.5, y: b.y + 0.5,
         width: b.w - 1, height: b.h - 1,
-        rx: 2, ry: 2
+        rx: 2, ry: 2,
+        'clip-path': 'url(#wholeclip-' + tooth + ')'
     }));
 }
 
@@ -1001,11 +1215,12 @@ function paintAllByStatus() {
     clearLayer(wholeLayer);
     clearLayer(procLayer);
     clearLayer(planLayer);
-    // 1. Apply examination findings
-    Object.keys(state.statuses).forEach(function (key) {
-        var s = state.statuses[key];
+    // 1. Apply examination findings (one record may cover several surfaces)
+    statusRecords().forEach(function (s) {
         if (s.surface === 'whole') applyWholeOverlay(s.tooth, s.condition);
-        else applySurfaceCondition(s.tooth, s.surface, s.condition);
+        else statusSurfaces(s).forEach(function (sf) {
+            applySurfaceCondition(s.tooth, sf, s.condition);
+        });
     });
     // 2. Apply procedure tints (overlays on top of examination color)
     Object.keys(state.procedures).forEach(function (pid) {
@@ -1015,10 +1230,11 @@ function paintAllByStatus() {
             markProcedureOnSurface(p.tooth, sf, p.procedure);
         });
     });
-    // 3. Apply plan markers (dashed orange borders)
+    // 3. Apply plan markers (dashed orange borders) — across all step surfaces
     Object.keys(state.planSteps).forEach(function (id) {
         var st = state.planSteps[id];
-        markPlanOnSurface(st.tooth, st.surface, st);
+        var psurfs = (st.surfaces && st.surfaces.length) ? st.surfaces : [st.surface];
+        psurfs.forEach(function (sf) { markPlanOnSurface(st.tooth, sf, st); });
     });
 }
 paintAllByStatus();
@@ -1080,7 +1296,7 @@ function renderLegend() {
 
 function renderStatusList() {
     var ul = document.getElementById('dchart3d-status-list');
-    var rows = Object.values(state.statuses).sort(function (a, b) {
+    var rows = statusRecords().sort(function (a, b) {
         return (a.tooth + a.surface).localeCompare(b.tooth + b.surface);
     });
     if (!rows.length) {
@@ -1089,11 +1305,12 @@ function renderStatusList() {
     }
     ul.innerHTML = '';
     rows.forEach(function (s) {
+        var surfacesText = statusSurfaces(s).map(function (x) { return SURFACE_LABELS[x] || x; }).join(' + ');
         var li = document.createElement('li');
         li.className = 'dchart3d-row';
         li.innerHTML =
             '<div class="dchart3d-row-main">' +
-                '<div class="dchart3d-row-title">سن ' + s.tooth + ' — ' + (SURFACE_LABELS[s.surface] || s.surface) + '</div>' +
+                '<div class="dchart3d-row-title">سن ' + s.tooth + ' — ' + escapeHtml(surfacesText) + '</div>' +
                 '<div class="dchart3d-row-sub">' +
                     '<span class="dchart3d-legend-swatch" style="background:' + (CONDITION_COLORS[s.condition] || '#fff') + ';display:inline-block;vertical-align:middle;margin-left:6px;"></span>' +
                     escapeHtml(s.condition_label) +
@@ -1142,7 +1359,7 @@ function renderPlanList() {
             li.innerHTML =
                 '<div class="dchart3d-row-main">' +
                     '<div class="dchart3d-row-title">' +
-                        escapeHtml(st.procedure_label) + ' — سن ' + st.tooth + ' / ' + (SURFACE_LABELS[st.surface] || st.surface) +
+                        escapeHtml(st.procedure_label) + ' — سن ' + st.tooth + ' / ' + escapeHtml(((st.surfaces && st.surfaces.length) ? st.surfaces : [st.surface]).map(function (x) { return SURFACE_LABELS[x] || x; }).join(' + ')) +
                         prTag + stTag +
                     '</div>' +
                     '<div class="dchart3d-row-sub">' +
@@ -1172,7 +1389,7 @@ function renderPlanList() {
             li.innerHTML =
                 '<div class="dchart3d-row-main">' +
                     '<div class="dchart3d-row-title">' +
-                        escapeHtml(st.procedure_label) + ' — سن ' + st.tooth + ' / ' + (SURFACE_LABELS[st.surface] || st.surface) +
+                        escapeHtml(st.procedure_label) + ' — سن ' + st.tooth + ' / ' + escapeHtml(((st.surfaces && st.surfaces.length) ? st.surfaces : [st.surface]).map(function (x) { return SURFACE_LABELS[x] || x; }).join(' + ')) +
                         prTag + stTag +
                     '</div>' +
                     '<div class="dchart3d-row-sub">' +
@@ -1308,6 +1525,10 @@ var btnCancel  = document.getElementById('dchart3d-cancel');
 
 var examGrid   = document.getElementById('dchart3d-exam-grid');
 var examNote   = document.getElementById('dchart3d-exam-note');
+var examExtras    = document.getElementById('dchart3d-exam-extras');
+var examExtraRow  = document.getElementById('dchart3d-exam-extra-row');
+var planExtras    = document.getElementById('dchart3d-plan-extras');
+var planExtraRow  = document.getElementById('dchart3d-plan-extra-row');
 var planProc   = document.getElementById('dchart3d-plan-procedure');
 var planPrio   = document.getElementById('dchart3d-plan-priority');
 var planCanals = document.getElementById('dchart3d-plan-canals');
@@ -1357,11 +1578,19 @@ function buildExamGrid(currentCode) {
     });
 }
 
-function buildProcExtras(tooth, primary) {
-    procExtras.innerHTML = '';
+// Crown surfaces only — clickable to toggle additional surfaces. Used by all
+// three modes (examination / plan / procedures) so a single action can target
+// multiple surfaces of a tooth at once. Selections collect in
+// state.extraSurfaces. Occlusal (O) is skipped for anterior teeth, which have
+// no occlusal surface.
+var CROWN_SURFACES = ['O','M','D','B','L'];
+
+function buildExtraSurfaces(container, tooth, primary) {
+    container.innerHTML = '';
     state.extraSurfaces.clear();
-    ['O','M','D','B','L'].forEach(function (s) {
+    CROWN_SURFACES.forEach(function (s) {
         if (s === primary) return;
+        if (s === 'O' && ANTERIOR_TEETH.has(String(tooth))) return;
         var b = document.createElement('button');
         b.type = 'button';
         b.className = 'dchart3d-cond-btn';
@@ -1371,8 +1600,17 @@ function buildProcExtras(tooth, primary) {
             if (state.extraSurfaces.has(s)) { state.extraSurfaces.delete(s); b.classList.remove('is-selected'); }
             else { state.extraSurfaces.add(s); b.classList.add('is-selected'); }
         });
-        procExtras.appendChild(b);
+        container.appendChild(b);
     });
+}
+
+// Whether a surface is a crown surface that supports multi-surface selection.
+function isCrownSurface(surface) {
+    return CROWN_SURFACES.indexOf(surface) >= 0;
+}
+
+function buildProcExtras(tooth, primary) {
+    buildExtraSurfaces(procExtras, tooth, primary);
 }
 
 function openDialog(tooth, surface, opts) {
@@ -1406,6 +1644,20 @@ function openDialog(tooth, surface, opts) {
             state.selection.examCondition = opts.prefill.condition;
             buildExamGrid(opts.prefill.condition);
         }
+        // Multi-surface: let the chosen condition apply to extra crown surfaces.
+        examExtraRow.style.display = isCrownSurface(surface) ? '' : 'none';
+        if (isCrownSurface(surface)) {
+            buildExtraSurfaces(examExtras, tooth, surface);
+            // When editing an existing multi-surface finding, pre-select its
+            // other surfaces so re-saving keeps them together.
+            if (existing && existing.surfaces) {
+                existing.surfaces.forEach(function (sf) {
+                    if (sf === surface) return;
+                    var b = examExtras.querySelector('.dchart3d-cond-btn[data-code="' + sf + '"]');
+                    if (b) { state.extraSurfaces.add(sf); b.classList.add('is-selected'); }
+                });
+            }
+        }
     } else if (state.selection.mode === 'plan') {
         var fromExam = state.statuses[tooth + '-' + surface];
         var suggested = '';
@@ -1428,6 +1680,11 @@ function openDialog(tooth, surface, opts) {
             planCanalsRow.style.display = (st.procedure === 'rct') ? '' : 'none';
             dlgSub.textContent = 'تعديل خطوة موجودة في الخطة.';
         }
+        // Multi-surface: only when creating new steps (not editing an existing
+        // one). Creates one plan step per selected surface.
+        var planCanMulti = isCrownSurface(surface) && !opts.stepId;
+        planExtraRow.style.display = planCanMulti ? '' : 'none';
+        if (planCanMulti) buildExtraSurfaces(planExtras, tooth, surface);
     } else if (state.selection.mode === 'procedures') {
         if (!VISIT_ID) { alert('افتح زيارة أولاً.'); state.selection = null; return; }
         var matching = Object.values(state.planSteps).filter(function (s) {
@@ -1507,12 +1764,31 @@ btnSave.addEventListener('click', function () {
         closeDialog();
     };
     if (sel.mode === 'examination') {
+        // One request handles the primary surface + any extra surfaces, so the
+        // whole multi-surface save commits together on the server.
+        var extraExam = Array.from(state.extraSurfaces);
         api(URLS.status, {
             tooth: sel.tooth, surface: sel.surface,
             condition: sel.examCondition || '',
             note: examNote.value.trim(),
-            visit_id: VISIT_ID
-        }).then(done);
+            visit_id: VISIT_ID,
+            extra_surfaces: extraExam
+        }).then(function (res) {
+            btnSave.disabled = false;
+            if (!res || !res.ok) { alert('تعذر الحفظ. ' + (res && res.status ? '(HTTP ' + res.status + ')' : '')); return; }
+            // Drop any prior records that touched the surfaces involved, then
+            // register the (single) returned record under all its surfaces.
+            var involved = [sel.surface].concat(extraExam);
+            removeStatusBySurfaces(sel.tooth, involved);
+            if (!res.cleared) {
+                (res.statuses || (res.status ? [res.status] : [])).forEach(function (st) {
+                    registerStatus(st);
+                });
+            }
+            paintAllByStatus();
+            rerenderAll();
+            closeDialog();
+        }).catch(function () { btnSave.disabled = false; alert('تعذر الاتصال بالخادم.'); });
     } else if (sel.mode === 'plan') {
         if (sel.stepId) {
             api(URLS.plan_update_tpl.replace('__ID__', sel.stepId), {
@@ -1525,13 +1801,26 @@ btnSave.addEventListener('click', function () {
                 done(res && res.ok ? { ok: true } : res);
             });
         } else {
+            // One request creates a plan step for the primary surface plus
+            // each extra surface, all committed together on the server.
+            var extraPlan = Array.from(state.extraSurfaces);
             api(URLS.plan_create, {
                 tooth: sel.tooth, surface: sel.surface,
                 procedure: planProc.value,
                 priority: planPrio.value,
                 notes: planNotes.value.trim(),
-                canals: planCanals.value.trim()
-            }).then(done);
+                canals: planCanals.value.trim(),
+                extra_surfaces: extraPlan
+            }).then(function (res) {
+                btnSave.disabled = false;
+                if (!res || !res.ok) { alert('تعذر الحفظ. ' + (res && res.status ? '(HTTP ' + res.status + ')' : '')); return; }
+                (res.steps || (res.step ? [res.step] : [])).forEach(function (st) {
+                    state.planSteps[st.id] = st;
+                });
+                paintAllByStatus();
+                rerenderAll();
+                closeDialog();
+            }).catch(function () { btnSave.disabled = false; alert('تعذر الاتصال بالخادم.'); });
         }
     } else if (sel.mode === 'procedures') {
         if (!URLS.proc_create) { alert('لا توجد زيارة مفتوحة.'); btnSave.disabled = false; return; }
@@ -1553,13 +1842,19 @@ btnClear.addEventListener('click', function () {
     if (!state.selection || state.selection.mode !== 'examination') return;
     var sel = state.selection;
     btnClear.disabled = true;
+    // Clear the whole finding (its primary surface + any extras), not just the
+    // clicked surface.
+    var rec = state.statuses[sel.tooth + '-' + sel.surface];
+    var primary = rec ? rec.surface : sel.surface;
+    var clearExtras = rec ? statusSurfaces(rec).filter(function (x) { return x !== primary; }) : [];
     api(URLS.status, {
-        tooth: sel.tooth, surface: sel.surface,
-        condition: '', note: '', visit_id: VISIT_ID
+        tooth: sel.tooth, surface: primary,
+        condition: '', note: '', visit_id: VISIT_ID,
+        extra_surfaces: clearExtras
     }).then(function (res) {
         btnClear.disabled = false;
         if (res && res.ok) {
-            delete state.statuses[sel.tooth + '-' + sel.surface];
+            removeStatusBySurfaces(sel.tooth, res.surfaces || [primary].concat(clearExtras));
             paintAllByStatus();
             rerenderAll();
             closeDialog();
@@ -1586,13 +1881,19 @@ infoEl.addEventListener('click', function (e) {
         openDialog(btn.getAttribute('data-tooth'), btn.getAttribute('data-surface'));
     } else if (act === 'exam-clear') {
         if (!confirm('حذف هذه الحالة من المعاينة؟')) return;
+        var ecTooth = btn.getAttribute('data-tooth');
+        var ecSurface = btn.getAttribute('data-surface');
+        var ecRec = state.statuses[ecTooth + '-' + ecSurface];
+        var ecPrimary = ecRec ? ecRec.surface : ecSurface;
+        var ecExtras = ecRec ? statusSurfaces(ecRec).filter(function (x) { return x !== ecPrimary; }) : [];
         api(URLS.status, {
-            tooth: btn.getAttribute('data-tooth'),
-            surface: btn.getAttribute('data-surface'),
-            condition: ''
+            tooth: ecTooth,
+            surface: ecPrimary,
+            condition: '',
+            extra_surfaces: ecExtras
         }).then(function (res) {
             if (res && res.ok) {
-                delete state.statuses[btn.getAttribute('data-tooth') + '-' + btn.getAttribute('data-surface')];
+                removeStatusBySurfaces(ecTooth, res.surfaces || [ecPrimary].concat(ecExtras));
                 paintAllByStatus(); rerenderAll();
             }
         });

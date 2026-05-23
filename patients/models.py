@@ -753,6 +753,10 @@ class ToothStatus(models.Model):
     surface            = models.CharField(max_length=10, choices=DENTAL_SURFACE_CHOICES, default='whole')
     condition          = models.CharField(max_length=20, choices=DENTAL_CONDITION_CHOICES)
     note               = models.CharField(max_length=200, blank=True, default='')
+    surfaces_csv       = models.CharField(
+        max_length=60, blank=True, default='',
+        help_text='Comma-separated extra surfaces for a multi-surface finding, e.g. "O,M".',
+    )
     last_updated_visit = models.ForeignKey('Visit', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     created_at         = models.DateTimeField(auto_now_add=True)
     updated_at         = models.DateTimeField(auto_now=True)
@@ -766,6 +770,12 @@ class ToothStatus(models.Model):
 
     def __str__(self):
         return f"Status {self.patient_id} {self.tooth_number}/{self.surface} = {self.condition}"
+
+    @property
+    def all_surfaces(self):
+        """Primary surface plus any extras stored in surfaces_csv."""
+        extras = [s.strip() for s in (self.surfaces_csv or '').split(',') if s.strip()]
+        return [self.surface] + [s for s in extras if s != self.surface]
 
 
 class TreatmentPlan(models.Model):
@@ -837,6 +847,10 @@ class PlanStep(models.Model):
     sequence     = models.PositiveIntegerField(default=0)
     notes        = models.CharField(max_length=300, blank=True, default='')
     status       = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    surfaces_csv = models.CharField(
+        max_length=60, blank=True, default='',
+        help_text='Comma-separated extra surfaces for a multi-surface step, e.g. "O,M".',
+    )
     canals       = models.CharField(
         max_length=120, blank=True, default='',
         help_text='Comma-separated canal codes for RCT, e.g. "MB,DB,P".',
@@ -853,6 +867,12 @@ class PlanStep(models.Model):
 
     def __str__(self):
         return f"Step #{self.pk} {self.tooth_number}/{self.surface} {self.procedure}"
+
+    @property
+    def all_surfaces(self):
+        """Primary surface plus any extras stored in surfaces_csv."""
+        extras = [s.strip() for s in (self.surfaces_csv or '').split(',') if s.strip()]
+        return [self.surface] + [s for s in extras if s != self.surface]
 
 
 class VisitProcedure(models.Model):

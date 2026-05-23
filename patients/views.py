@@ -2145,6 +2145,7 @@ def _serialize_status(s):
         'id': s.id,
         'tooth': s.tooth_number,
         'surface': s.surface,
+        'surfaces': s.all_surfaces,
         'condition': s.condition,
         'condition_label': dict(DENTAL_CONDITION_CHOICES).get(s.condition, s.condition),
         'note': s.note,
@@ -2159,6 +2160,7 @@ def _serialize_step(step):
         'plan_id': step.plan_id,
         'tooth': step.tooth_number,
         'surface': step.surface,
+        'surfaces': step.all_surfaces,
         'procedure': step.procedure,
         'procedure_label': dict(DENTAL_PROCEDURE_CHOICES).get(step.procedure, step.procedure),
         'priority': step.priority,
@@ -2282,16 +2284,34 @@ def dental_update_status(request, patient_id):
     condition = str(payload.get('condition', '')).strip()
     note = str(payload.get('note', '') or '')[:200]
     visit_id = payload.get('visit_id')
+    extras = payload.get('extra_surfaces') or []
 
     if tooth not in _VALID_TEETH:
         return JsonResponse({'ok': False, 'error': 'bad_tooth'}, status=400)
     if surface not in _VALID_SURFACES:
         return JsonResponse({'ok': False, 'error': 'bad_surface'}, status=400)
 
-    # Empty condition -> clear that surface (delete the row).
+    # Primary surface + any extra surfaces are stored as ONE finding (the
+    # primary row carries the extras in surfaces_csv), mirroring how a
+    # procedure records multiple surfaces in a single record.
+    extra_clean = []
+    if isinstance(extras, list):
+        for s in extras:
+            s = str(s).strip()
+            if s and s in _VALID_SURFACES and s != surface and s not in extra_clean:
+                extra_clean.append(s)
+    all_surfaces = [surface] + extra_clean
+
+    from django.db import transaction
+
+    # Empty condition -> clear the whole finding (primary + extras), and any
+    # stray standalone rows that may exist on those surfaces.
     if condition == '':
-        ToothStatus.objects.filter(patient=patient, tooth_number=tooth, surface=surface).delete()
-        return JsonResponse({'ok': True, 'cleared': True})
+        with transaction.atomic():
+            ToothStatus.objects.filter(
+                patient=patient, tooth_number=tooth, surface__in=all_surfaces
+            ).delete()
+        return JsonResponse({'ok': True, 'cleared': True, 'surfaces': all_surfaces})
 
     if condition not in _VALID_CONDITIONS:
         return JsonResponse({'ok': False, 'error': 'bad_condition'}, status=400)
@@ -2301,11 +2321,24 @@ def dental_update_status(request, patient_id):
         profile = UserProfile.objects.get(user=request.user)
         visit = Visit.objects.filter(id=visit_id, clinic=profile.clinic, patient=patient).first()
 
-    obj, _created = ToothStatus.objects.update_or_create(
-        patient=patient, tooth_number=tooth, surface=surface,
-        defaults={'condition': condition, 'note': note, 'last_updated_visit': visit},
-    )
-    return JsonResponse({'ok': True, 'status': _serialize_status(obj)})
+    with transaction.atomic():
+        # Drop any standalone rows on the extra surfaces so they don't survive
+        # as duplicates alongside the consolidated record.
+        if extra_clean:
+            ToothStatus.objects.filter(
+                patient=patient, tooth_number=tooth, surface__in=extra_clean
+            ).delete()
+        obj, _created = ToothStatus.objects.update_or_create(
+            patient=patient, tooth_number=tooth, surface=surface,
+            defaults={
+                'condition': condition, 'note': note,
+                'surfaces_csv': ','.join(extra_clean),
+                'last_updated_visit': visit,
+            },
+        )
+    serialized = _serialize_status(obj)
+    # `status` kept for backward compatibility; `statuses` carries the record.
+    return JsonResponse({'ok': True, 'status': serialized, 'statuses': [serialized]})
 
 
 # -----------------------------------------------------------------------------
@@ -2330,6 +2363,7 @@ def dental_create_plan_step(request, patient_id):
     notes = str(payload.get('notes', '') or '')[:300]
     canals = str(payload.get('canals', '') or '')[:120]
     plan_id = payload.get('plan_id')
+    extras = payload.get('extra_surfaces') or []
 
     if tooth not in _VALID_TEETH:
         return JsonResponse({'ok': False, 'error': 'bad_tooth'}, status=400)
@@ -2340,30 +2374,45 @@ def dental_create_plan_step(request, patient_id):
     if priority not in _VALID_PRIORITIES:
         priority = 'necessary'
 
-    plan = None
-    if plan_id:
-        plan = TreatmentPlan.objects.filter(id=plan_id, patient=patient).first()
-    if plan is None:
-        plan = TreatmentPlan.objects.create(
-            patient=patient,
+    # Primary surface + any extra surfaces are stored as ONE step (the extras
+    # ride along in surfaces_csv), mirroring a multi-surface procedure.
+    extra_clean = []
+    if isinstance(extras, list):
+        for s in extras:
+            s = str(s).strip()
+            if s and s in _VALID_SURFACES and s != surface and s not in extra_clean:
+                extra_clean.append(s)
+
+    from django.db import transaction
+
+    with transaction.atomic():
+        plan = None
+        if plan_id:
+            plan = TreatmentPlan.objects.filter(id=plan_id, patient=patient).first()
+        if plan is None:
+            plan = TreatmentPlan.objects.create(
+                patient=patient,
+                priority=priority,
+                created_by=request.user,
+            )
+
+        last_seq = plan.steps.order_by('-sequence').values_list('sequence', flat=True).first() or 0
+
+        step = PlanStep.objects.create(
+            plan=plan,
+            tooth_number=tooth,
+            surface=surface,
+            surfaces_csv=','.join(extra_clean),
+            procedure=procedure,
             priority=priority,
-            created_by=request.user,
+            notes=notes,
+            canals=canals,
+            sequence=last_seq + 1,
         )
-
-    last_seq = plan.steps.order_by('-sequence').values_list('sequence', flat=True).first() or 0
-
-    step = PlanStep.objects.create(
-        plan=plan,
-        tooth_number=tooth,
-        surface=surface,
-        procedure=procedure,
-        priority=priority,
-        notes=notes,
-        canals=canals,
-        sequence=last_seq + 1,
-    )
-    plan.recalc_status()
-    return JsonResponse({'ok': True, 'step': _serialize_step(step)})
+        plan.recalc_status()
+    serialized = _serialize_step(step)
+    # `step` is the record; `steps` kept as a one-item list for the frontend.
+    return JsonResponse({'ok': True, 'step': serialized, 'steps': [serialized]})
 
 
 @login_required(login_url='login')

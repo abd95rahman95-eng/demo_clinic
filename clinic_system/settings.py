@@ -124,6 +124,10 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # Compress dynamic HTML/JSON responses. Placed after WhiteNoise so static
+    # files (already compressed by WhiteNoise) are not re-compressed; GZip also
+    # skips any response that already carries a Content-Encoding header.
+    'django.middleware.gzip.GZipMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

@@ -246,6 +246,7 @@
                 <div class="info-line"><span class="k">العيادة:</span><span class="v">{{ clinic.name }}</span></div>
                 <div class="info-line"><span class="k">رقم العيادة:</span><span class="v">{{ clinic.clinic_number|default:"—" }}</span></div>
                 <div class="info-line"><span class="k">التخصص:</span><span class="v">{{ clinic.specialty_type|default:clinic.get_specialty_display }}</span></div>
+                <div class="info-line"><span class="k">العنوان:</span><span class="v">{{ clinic.address|default:"—" }}</span></div>
                 {% else %}
                 <div class="info-line"><span class="k">العيادة:</span><span class="v">—</span></div>
                 {% endif %}

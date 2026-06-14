@@ -40,6 +40,12 @@ class Clinic(models.Model):
         help_text='النص الذي يظهر للطاقم في صفحة إدارة الحساب — مثال: "طب الأسرة" أو "أمراض القلب التداخلية".',
     )
 
+    address = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name='عنوان العيادة',
+        help_text='عنوان العيادة الذي يظهر في صفحة إدارة الحساب وعلى الوصفة الطبية.',
+    )
+
     trial_start = models.DateField(null=True, blank=True)
 
     # ── AI usage tracking ──────────────────────────────────────────────────

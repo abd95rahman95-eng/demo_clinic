@@ -46,6 +46,7 @@ body {
 .rx-header .rx-doctor-block { flex: 1; text-align: center; }
 .rx-header .doctor-name { font-size: 22px; font-weight: 900; color: #1a3d28; line-height: 1.15; }
 .rx-header .specialty   { font-size: 13px; color: #5a8a6a; margin-top: 4px; font-weight: 600; }
+.rx-header .clinic-address { font-size: 11px; color: #7a9a86; margin-top: 3px; font-weight: 500; }
 
 .rx-icon {
     width: 46px; height: 46px;
@@ -173,6 +174,7 @@ body {
         <div class="rx-doctor-block">
             <div class="doctor-name">د. {{ doctor_name }}</div>
             {% if specialty_label %}<div class="specialty">{{ specialty_label }}</div>{% endif %}
+            {% if clinic.address %}<div class="clinic-address">{{ clinic.address }}</div>{% endif %}
         </div>
         <div class="rx-icon">℞</div>
     </div>

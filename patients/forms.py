@@ -48,7 +48,7 @@ class PatientForm(forms.ModelForm):
         fields = ['name', 'phone', 'gender', 'address']
         labels = {
             'name': 'الاسم',
-            'phone': 'رقم الهاتف (10 أرقام)',
+            'phone': 'رقم الهاتف',
             'gender': 'الجنس',
             'address': 'العنوان',
         }

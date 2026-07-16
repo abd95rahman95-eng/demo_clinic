@@ -165,6 +165,7 @@ class ClinicAdmin(admin.ModelAdmin):
                 "specialty",
                 "specialty_type",
                 "address",
+                "phone",
             ),
             "description": (
                 "<b>specialty</b>: الحقل الداخلي الذي يحدد نموذج الحقول الطبية في النظام (لا تغيّره إلا عند تغيير الاختصاص الفعلي). "

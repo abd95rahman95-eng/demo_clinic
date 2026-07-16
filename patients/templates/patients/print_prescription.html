@@ -5,56 +5,63 @@
 <meta charset="UTF-8">
 <title>وصفة طبية — {{ patient.name }}</title>
 <style>
-/* ── A5 prescription print sheet ──────────────────────────────────────
-   A5 = 148 × 210 mm portrait. We set @page so the browser knows the
-   target sheet size, and constrain the visible .sheet to A5 dimensions
-   for the on-screen preview before the user hits Print.
+/* ── A6 prescription print sheet ──────────────────────────────────────
+   A6 = 105 × 148 mm portrait. The medicines are laid out inside a table
+   whose <thead> (doctor + patient) and <tfoot> (signature + footer note)
+   are automatically REPEATED by the browser on every printed page when a
+   long prescription overflows onto a second sheet.
    ─────────────────────────────────────────────────────────────────── */
-@page { size: A5 portrait; margin: 10mm; }
+@page { size: A6 portrait; margin: 6mm; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
     font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
     direction: rtl;
     background: #e2e8f0;
     color: #1a1a2e;
-    font-size: 12px;
-    line-height: 1.55;
-    padding: 20px 12px;
+    font-size: 9px;
+    line-height: 1.3;
+    padding: 16px 10px;
 }
 .sheet {
-    width: 148mm;
-    min-height: 210mm;
+    width: 105mm;
+    min-height: 148mm;
     background: white;
     margin: 0 auto;
-    padding: 12mm;
+    padding: 6mm;
     box-shadow: 0 4px 18px rgba(0,0,0,0.18);
-    display: flex; flex-direction: column;
 }
 
-/* Header — doctor name (large, centered) + specialty under it.
-   The Rx symbol pill stays at the far edge as a brand mark. */
+/* The whole prescription is one table so head/foot repeat per page. */
+.rx-table { width: 100%; border-collapse: collapse; }
+.rx-table > thead { display: table-header-group; }
+.rx-table > tfoot { display: table-footer-group; }
+.rx-table > thead td,
+.rx-table > tfoot td,
+.rx-table > tbody td { padding: 0; }
+
+/* Header — doctor name (centered) + specialty + address ; phone. */
 .rx-header {
-    border-bottom: 2px solid #1a6b3c;
-    padding-bottom: 12px;
-    margin-bottom: 14px;
+    border-bottom: 1.5px solid #1a6b3c;
+    padding-bottom: 6px;
+    margin-bottom: 7px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 14px;
+    gap: 8px;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 .rx-header .rx-doctor-block { flex: 1; text-align: center; }
-.rx-header .doctor-name { font-size: 22px; font-weight: 900; color: #1a3d28; line-height: 1.15; }
-.rx-header .specialty   { font-size: 13px; color: #5a8a6a; margin-top: 4px; font-weight: 600; }
-.rx-header .clinic-address { font-size: 11px; color: #7a9a86; margin-top: 3px; font-weight: 500; }
+.rx-header .doctor-name { font-size: 15px; font-weight: 900; color: #1a3d28; line-height: 1.1; }
+.rx-header .specialty   { font-size: 9px; color: #5a8a6a; margin-top: 2px; font-weight: 600; }
+.rx-header .clinic-address { font-size: 8px; color: #7a9a86; margin-top: 2px; font-weight: 500; }
 
 .rx-icon {
-    width: 46px; height: 46px;
+    width: 30px; height: 30px;
     background: #ecfdf5;
-    border: 2px solid #1a6b3c;
+    border: 1.5px solid #1a6b3c;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px; color: #1a6b3c; font-weight: 800;
+    font-size: 15px; color: #1a6b3c; font-weight: 800;
     flex-shrink: 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
@@ -63,59 +70,58 @@ body {
 .patient-strip {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 8px;
+    gap: 6px;
     background: #f8fbf9;
     border: 1px solid #c5deca;
-    border-radius: 8px;
-    padding: 8px 10px;
-    margin-bottom: 14px;
-    font-size: 12px;
+    border-radius: 6px;
+    padding: 5px 7px;
+    margin-bottom: 7px;
+    font-size: 9px;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-.patient-strip .lbl { color: #5a8a6a; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.patient-strip .lbl { color: #5a8a6a; font-size: 8px; font-weight: 700; text-transform: uppercase; }
 .patient-strip .val { font-weight: 700; color: #1a3d28; margin-top: 1px; }
 
 /* Rx title */
 .rx-title {
-    font-size: 38px;
+    font-size: 20px;
     font-weight: 900;
     color: #1a6b3c;
     font-style: italic;
-    margin-bottom: 6px;
+    margin-bottom: 3px;
     line-height: 1;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-.rx-title small { font-size: 12px; color: #5a8a6a; font-style: normal; font-weight: 600; vertical-align: middle; margin-right: 8px; }
+.rx-title small { font-size: 9px; color: #5a8a6a; font-style: normal; font-weight: 600; vertical-align: middle; margin-right: 6px; }
 
 /* Medicines list */
-.meds {
-    flex: 1;
+.meds-head {
     border-top: 1px dashed #c5deca;
-    padding-top: 8px;
+    padding-top: 5px;
 }
 .med-row {
     border-bottom: 1px dashed #d9e8dc;
-    padding: 7px 0;
+    padding: 4px 0;
     page-break-inside: avoid;
 }
 .med-row:last-child { border-bottom: none; }
 .med-name {
-    font-size: 14px;
+    font-size: 10px;
     font-weight: 800;
     color: #1a3d28;
 }
 .med-meta {
-    margin-top: 3px;
-    font-size: 12px;
+    margin-top: 2px;
+    font-size: 8.5px;
     color: #1f2937;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 4px 12px;
+    gap: 2px 8px;
 }
 .med-meta .k { color: #5a8a6a; font-weight: 600; }
 .med-notes {
-    margin-top: 4px;
-    font-size: 11px;
+    margin-top: 2px;
+    font-size: 8px;
     color: #64748b;
     font-style: italic;
 }
@@ -123,127 +129,147 @@ body {
 .free-text {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    padding: 8px 10px;
-    margin-top: 10px;
-    font-size: 11px;
+    border-radius: 5px;
+    padding: 5px 7px;
+    margin-top: 6px;
+    font-size: 8px;
     color: #334155;
     white-space: pre-wrap;
 }
 
-/* Footer — signature line + date */
+/* Footer — signature line + date (repeats on every page via tfoot) */
 .rx-footer {
-    margin-top: auto;
-    padding-top: 12px;
+    margin-top: 7px;
+    padding-top: 6px;
     border-top: 1px solid #c5deca;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    font-size: 11px;
+    font-size: 8px;
     color: #5a8a6a;
 }
 .sig { text-align: center; }
-.sig-line { width: 130px; border-bottom: 1px solid #1a3d28; margin-bottom: 4px; }
+.sig-line { width: 90px; border-bottom: 1px solid #1a3d28; margin-bottom: 3px; }
+.rx-eyada {
+    margin-top: 5px; text-align: center; font-size: 7.5px; color: #64748b;
+    border-top: 1px dashed #cbd5e1; padding-top: 4px;
+}
 
 /* Print-mode tweaks */
 @media print {
     body { background: white; padding: 0; }
-    .sheet { box-shadow: none; width: 100%; min-height: 100vh; padding: 6mm; }
+    .sheet { box-shadow: none; width: 100%; min-height: auto; padding: 0; }
     .no-print { display: none !important; }
 }
 .toolbar {
-    max-width: 148mm; margin: 12px auto 0; text-align: center;
+    max-width: 105mm; margin: 12px auto 0; text-align: center;
 }
 .toolbar button {
     background: #1a6b3c; color: white;
     border: none; border-radius: 8px;
-    padding: 10px 22px; font-size: 14px; font-weight: 700;
+    padding: 9px 20px; font-size: 13px; font-weight: 700;
     cursor: pointer; font-family: inherit;
 }
 .toolbar button:hover { opacity: 0.9; }
+.toolbar button + button { background: #64748b; }
 </style>
 </head>
 <body>
 
 <div class="sheet">
+    <table class="rx-table">
 
-    <!-- Header — clinic name removed; doctor name centered/large; specialty beneath. -->
-    <div class="rx-header">
-        {# Spacer matches the rx-icon width so the doctor block stays optically centered. #}
-        <div style="width:46px; flex-shrink:0;"></div>
-        <div class="rx-doctor-block">
-            <div class="doctor-name">د. {{ doctor_name }}</div>
-            {% if specialty_label %}<div class="specialty">{{ specialty_label }}</div>{% endif %}
-            {% if clinic.address %}<div class="clinic-address">{{ clinic.address }}</div>{% endif %}
-        </div>
-        <div class="rx-icon">℞</div>
-    </div>
-
-    <!-- Patient strip -->
-    <div class="patient-strip">
-        <div>
-            <div class="lbl">المريض</div>
-            <div class="val">{{ patient.name }}</div>
-        </div>
-        <div>
-            <div class="lbl">العمر</div>
-            <div class="val">{{ patient.age_years|default:patient.age|default:"—" }}</div>
-        </div>
-        <div>
-            <div class="lbl">الهاتف</div>
-            <div class="val">{{ patient.phone|default:"—" }}</div>
-        </div>
-    </div>
-
-    <!-- Rx title -->
-    <div class="rx-title">℞ <small>الوصفة الطبية</small></div>
-
-    <!-- Medicines -->
-    <div class="meds">
-        {% if items %}
-            {% for it in items %}
-            <div class="med-row">
-                <div class="med-name">{{ forloop.counter }}. {{ it.name }}</div>
-                <div class="med-meta">
-                    {% if it.dose %}<div><span class="k">الجرعة:</span> {{ it.dose }}</div>{% endif %}
-                    {% if it.frequency %}<div><span class="k">التكرار:</span> {{ it.frequency }}</div>{% endif %}
-                    {% if it.duration %}<div><span class="k">المدة:</span> {{ it.duration }}</div>{% endif %}
+        <!-- Repeating header: doctor block + patient strip + Rx title -->
+        <thead>
+        <tr><td>
+            <div class="rx-header">
+                {# Spacer matches the rx-icon width so the doctor block stays optically centered. #}
+                <div style="width:30px; flex-shrink:0;"></div>
+                <div class="rx-doctor-block">
+                    <div class="doctor-name">د. {{ doctor_name }}</div>
+                    {% if specialty_label %}<div class="specialty">{{ specialty_label }}</div>{% endif %}
+                    {% if clinic.address or clinic.phone %}
+                        <div class="clinic-address">
+                            {{ clinic.address }}{% if clinic.address and clinic.phone %} ؛ {% endif %}{{ clinic.phone }}
+                        </div>
+                    {% endif %}
                 </div>
-                {% if it.notes %}<div class="med-notes">{{ it.notes }}</div>{% endif %}
+                <div class="rx-icon">℞</div>
             </div>
-            {% endfor %}
-        {% elif free_text %}
-            <div class="med-row">
-                <div class="med-notes" style="font-style: normal; color:#1a1a2e; font-size:13px; white-space:pre-wrap;">{{ free_text }}</div>
-            </div>
-        {% else %}
-            <div class="med-notes" style="color:#94a3b8; padding: 18px 0;">لا توجد أدوية مدوّنة على هذه الزيارة.</div>
-        {% endif %}
 
-        {% if items and free_text %}
-        <div class="free-text"><strong>ملاحظات الطبيب:</strong>
+            <div class="patient-strip">
+                <div>
+                    <div class="lbl">المريض</div>
+                    <div class="val">{{ patient.name }}</div>
+                </div>
+                <div>
+                    <div class="lbl">العمر</div>
+                    <div class="val">{{ patient.age_years|default:patient.age|default:"—" }}</div>
+                </div>
+                <div>
+                    <div class="lbl">الهاتف</div>
+                    <div class="val">{{ patient.phone|default:"—" }}</div>
+                </div>
+            </div>
+
+            <div class="rx-title">℞ <small>الوصفة الطبية</small></div>
+        </td></tr>
+        </thead>
+
+        <!-- Repeating footer: signature + date + eyadatak note -->
+        <tfoot>
+        <tr><td>
+            <div class="rx-footer">
+                <div>تاريخ: {{ visit.created_at|date:"Y-m-d" }}</div>
+                <div class="sig">
+                    <div class="sig-line"></div>
+                    <div>توقيع الطبيب</div>
+                </div>
+            </div>
+            <div class="rx-eyada">
+                هذه الوصفة جهّزت إلكترونيًا عبر نظام إدارة العيادات "عيادتك" eyadatak.com
+            </div>
+        </td></tr>
+        </tfoot>
+
+        <!-- Medicines -->
+        <tbody>
+        <tr><td>
+            <div class="meds-head">
+            {% if items %}
+                {% for it in items %}
+                <div class="med-row">
+                    <div class="med-name">{{ forloop.counter }}. {{ it.name }}</div>
+                    <div class="med-meta">
+                        {% if it.dose %}<div><span class="k">الجرعة:</span> {{ it.dose }}</div>{% endif %}
+                        {% if it.frequency %}<div><span class="k">التكرار:</span> {{ it.frequency }}</div>{% endif %}
+                        {% if it.duration %}<div><span class="k">المدة:</span> {{ it.duration }}</div>{% endif %}
+                    </div>
+                    {% if it.notes %}<div class="med-notes">{{ it.notes }}</div>{% endif %}
+                </div>
+                {% endfor %}
+            {% elif free_text %}
+                <div class="med-row">
+                    <div class="med-notes" style="font-style: normal; color:#1a1a2e; font-size:9.5px; white-space:pre-wrap;">{{ free_text }}</div>
+                </div>
+            {% else %}
+                <div class="med-notes" style="color:#94a3b8; padding: 12px 0;">لا توجد أدوية مدوّنة على هذه الزيارة.</div>
+            {% endif %}
+
+            {% if items and free_text %}
+            <div class="free-text"><strong>ملاحظات الطبيب:</strong>
 {{ free_text }}</div>
-        {% endif %}
-    </div>
+            {% endif %}
+            </div>
+        </td></tr>
+        </tbody>
 
-    <!-- Footer -->
-    <div class="rx-footer">
-        <div>تاريخ: {{ visit.created_at|date:"Y-m-d" }}</div>
-        <div class="sig">
-            <div class="sig-line"></div>
-            <div>توقيع الطبيب</div>
-        </div>
-    </div>
-
-    <div style="margin-top: 14px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 6px;">
-        هذه الوصفة جهّزت إلكترونيًا عبر نظام إدارة العيادات "عيادتك" eyadatak.com
-    </div>
-
+    </table>
 </div>
 
 <div class="toolbar no-print">
-    <button onclick="window.print()"><i></i> 🖨️ طباعة</button>
-    <button onclick="window.close()" style="background:#64748b;">إغلاق</button>
+    <button onclick="window.print()">🖨️ طباعة</button>
+    <button onclick="window.close()">إغلاق</button>
 </div>
 
 <script>

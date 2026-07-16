@@ -46,6 +46,12 @@ class Clinic(models.Model):
         help_text='عنوان العيادة الذي يظهر في صفحة إدارة الحساب وعلى الوصفة الطبية.',
     )
 
+    phone = models.CharField(
+        max_length=30, blank=True, default='',
+        verbose_name='هاتف العيادة',
+        help_text='رقم هاتف العيادة الذي يظهر بجانب العنوان على الوصفة الطبية.',
+    )
+
     trial_start = models.DateField(null=True, blank=True)
 
     # ── AI usage tracking ──────────────────────────────────────────────────
